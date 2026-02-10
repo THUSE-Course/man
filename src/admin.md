@@ -35,6 +35,59 @@ SECoder 既可以指整个包含 Kubernetes 集群在内的平台,
 在这之外, 部署至少一个工作节点.
 通过以下配置和命令初始化控制面节点 (称为 node):
 
+```yaml
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: 10.128.1.111
+  bindPort: 6443
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+apiServer:
+  certSANs:
+    - c.secoder.net
+networking:
+  dnsDomain: cluster.local
+  podSubnet: 10.16.0.0/12
+  serviceSubnet: 10.32.0.0/12
+controlPlaneEndpoint: 10.128.1.111:6443
+clusterName: secoder
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+maxPods: 512
+```
+
+或者 IPv6 单栈:
+
+```
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: "2001:db8:0:0:2::2"
+  bindPort: 6443
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+clusterName: tunet
+kind: ClusterConfiguration
+controlPlaneEndpoint: "[2001:db8:0:0:2::2]:6443"
+apiServer:
+  certSANs:
+    - c.secoder.net
+networking:
+  podSubnet: "2001:db8:0:0:3::/96"
+  serviceSubnet: "2001:db8:0:0:3:1::/108"
+controllerManager:
+  extraArgs:
+    - name: node-cidr-mask-size-ipv6
+      value: "100"
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+maxPods: 512
+```
+
 ### FluxCD
 
 为了保持不同学期之间的一致性, SECoder 采用 GitOps 的方式部署集群配置.
@@ -93,6 +146,11 @@ gitlab-gitlab-initial-root-password \
    进入 `User settings > Personal access tokens`
    创建名为 `rw` 的 token, 设置 scope 为:
    - `api`
+
+1. 创建顶级分组
+
+   以 root 身份创建 `g2026`, `u2026` 顶级组.
+   组名在后续配置中会用到.
 
 ### SECoder 前后端
 
