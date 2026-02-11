@@ -10,12 +10,33 @@ SECoder 是软件工程课程所使用的开发平台, 它将服务同学们的�
 
 如果无法打开网页, 请在校园网环境内访问.
 
-注意:
+### 注册步骤
 
-- 建议填写真实姓名
-- 账号为学号
-- 填写最常用的邮箱, 与平时提交代码所使用的邮箱一致
-- 密码为初始密码
+1. **打开注册页面**
+
+   访问 https://backend.t.adamanteye.cc/register 或 https://secoder.net/register
+
+2. **填写注册信息**
+
+   在注册页面中填写以下信息:
+
+   - **姓名**: 建议填写真实姓名, 便于课程管理
+   - **账号**: 填写你的学号
+   - **电子邮箱**: 填写最常用的邮箱, 与平时提交代码所使用的邮箱保持一致
+   - **密码**: 使用助教提供的初始密码
+
+   <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
+     <img src="assets/register-pc.png" alt="注册页面 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
+     <img src="assets/register-mobile.png" alt="注册页面 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
+   </div>
+
+3. **完成注册**
+
+   填写完所有信息后, 点击 **注册** 按钮提交注册信息.
+
+4. **激活账号**
+
+   注册成功后, 你的账号即被激活, 可以使用学号和密码登录 SECoder 平台.
 
 ## 激活 GitLab
 
