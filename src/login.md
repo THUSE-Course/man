@@ -11,6 +11,35 @@
   <img src="assets/login-mobile-01.png" alt="登录页面 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
 </div>
 
+## 语言切换
+
+登录页面支持多语言切换，你可以点击页面右上角的 **Change Language** 按钮，在弹出的菜单中选择你需要的语言。
+
+<div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
+  <img src="assets/login-desktop-language-switch.png" alt="语言切换 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
+  <img src="assets/login-mobile-language-switch.png" alt="语言切换 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
+</div>
+
+系统支持三种语言：
+- **English** - 英文界面
+- **简体中文** - 简体中文界面（默认）
+- **繁體中文** - 繁体中文界面
+
+选择语言后，页面会立即切换到对应的语言显示。
+
+## 主题切换
+
+登录页面支持亮色和暗色模式切换，你可以点击页面右上角的主题切换按钮来切换显示模式。
+
+<div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
+  <img src="assets/login-desktop-theme-switch.png" alt="主题切换 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
+  <img src="assets/login-mobile-theme-switch.png" alt="主题切换 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
+</div>
+
+点击该按钮后，页面会在亮色模式和暗色模式之间切换。系统默认使用暗色模式。
+
+## 登录页面元素
+
 登录页面包含以下元素：
 - **学号输入框**：输入你的学号
 - **密码输入框**：输入你的密码
