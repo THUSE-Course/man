@@ -14,4 +14,4 @@ This is the documentation for SECoder, a next-generation platform for Software E
 
 请使用简洁专业的语言写文档. 文档的受众是本系统的用户 (大学生).
 
-系统的 URL 为 https://backend.t.adamanteye.cc , 测试用户为 2001 密码为 s001Afwae , 如果你不知道接下来应该如何操作, 可以询问我.
+系统的 URL 为 https://backend.t.adamanteye.cc , 测试用户为 2001 和 2003, 密码均为 s001Afwae , 平时用 2001, 遇到需要多用户的演示可以用 2003. 如果你不知道接下来应该如何操作, 可以询问我.

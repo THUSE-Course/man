@@ -1,6 +1,7 @@
 - [快速入门](./intro.md)
 - [用户登录](./login.md)
 - [主界面](./overview.md)
+- [创建小组](./create-group.md)
 - [个人资料](./profile.md)
 - [设计](./design.md)
 - [管理](./admin.md)
