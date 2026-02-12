@@ -35,6 +35,8 @@ GitLab 是一个基于 Web 的 DevOps 生命周期工具, 提供 Git 代码仓�
 - 进行代码审查和合并请求
 - 管理项目成员和权限
 
+**相关文档**: [GitLab 官方文档](https://docs.gitlab.com/) | [Git 入手指南](https://docs.gitlab.com/ee/topics/git/)
+
 ### SonarQube 代码质量和安全分析
 
 SonarQube 是一个开源的代码质量和安全分析平台, 能够检测代码中的 bug、漏洞和代码异味。
@@ -51,6 +53,8 @@ SonarQube 是一个开源的代码质量和安全分析平台, 能够检测代�
 - 识别代码中的潜在问题
 - 跟踪技术债务
 - 检查安全漏洞
+
+**相关文档**: [SonarQube 官方文档](https://docs.sonarsource.com/)
 
 ### Grafana 监控 集群指标告警
 
