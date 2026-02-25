@@ -61,7 +61,7 @@ maxPods: 512
 
 或者 IPv6 单栈:
 
-```
+```yaml
 apiVersion: kubeadm.k8s.io/v1beta4
 kind: InitConfiguration
 localAPIEndpoint:
