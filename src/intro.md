@@ -14,12 +14,11 @@ SECoder 是软件工程课程所使用的开发平台, 它将服务同学们的�
 
 1. **打开注册页面**
 
-   访问 https://backend.t.adamanteye.cc/register 或 https://secoder.net/register
+   访问 https://secoder.net/register
 
 2. **填写注册信息**
 
    在注册页面中填写以下信息:
-
    - **姓名**: 建议填写真实姓名, 便于课程管理
    - **账号**: 填写你的学号
    - **电子邮箱**: 填写最常用的邮箱, 与平时提交代码所使用的邮箱保持一致
@@ -67,7 +66,7 @@ SECoder 平台集成了 GitLab 代码仓库系统, 你可以通过 SECoder 账�
 3. **通过 SECoder 授权登录**
 
    点击 **secoder** 按钮, 会跳转到 SECoder 授权页面.
-   页面会显示将要同步给 GitLab 的信息 (账号、邮箱、姓名), 点击 **继续前往 GitLab** 完成授权.
+   页面会显示将要同步给 GitLab 的信息 (账号, 邮箱, 姓名), 点击 **继续前往 GitLab** 完成授权.
 
    <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
      <img src="assets/gitlab-jwt-desktop-03.png" alt="SECoder 授权页面 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
@@ -85,7 +84,7 @@ SECoder 平台集成了 GitLab 代码仓库系统, 你可以通过 SECoder 账�
 
 ### 同步 GitLab 子组
 
-登录成功后, SECoder 会自动将你的邮箱、姓名同步给 GitLab.
+登录成功后, SECoder 会自动将你的邮箱, 姓名同步给 GitLab.
 如果你在 SECoder 中修改了这些信息, 需要重新登录 GitLab 以更新.
 
 为了在 GitLab 中创建属于你的群组, 你需要手动触发同步:
