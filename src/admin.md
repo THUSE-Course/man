@@ -107,6 +107,21 @@ gitlab-gitlab-initial-root-password \
 -o jsonpath="{.data.password}" | base64 -d
 ```
 
+1. 允许 PAT 过期
+
+   进入 `Admin > Settings > General > Account and limit`,
+   - 禁用 `Access token expiration`
+   - 禁用 `Allow new users to create top-level groups`
+
+   点击 `Save changes` 保存选择.
+
+1. 允许 PAT 过期
+
+   进入 `Admin > Settings > General > Account and limit`,
+   - 禁用 `Access token expiration`
+
+   点击 `Save changes` 保存选择.
+
 1. 禁止注册
 
    进入 `Admin > Settings > General > Sign-up restrictions`,
@@ -141,16 +156,35 @@ gitlab-gitlab-initial-root-password \
 
    同样注意保存设置
 
+1. 创建 System hook
+
+   进入 `Admin > System hooks`, 配置 URL 为 `http://exporter:8000`. 不需要 Secret token. 这时测试可能看到 502 错误, 这是因为 exporter 还需要使用 Gitlab api token 主动查询.
+
 1. 创建 Access token
 
    进入 `User settings > Personal access tokens`
    创建名为 `rw` 的 token, 设置 scope 为:
    - `api`
 
+   这里的 token 随后应当提供给 SECoder 的 reconciler. 格式为
+
+   ```yaml
+   secretGenerator:
+     - name: reconciler
+     literals:
+       - gitlab-token=<your-token>
+   ```
+
 1. 创建顶级分组
 
-   以 root 身份创建 `g2026`, `u2026` 顶级组.
-   组名在后续配置中会用到.
+   以 root 身份创建 `g2026`, `u2026`, `pub` 顶级组.
+   前两个在后续配置中会用到.
+
+1. 为 Grafana 配置 oauth
+
+   [Configure GitLab OAuth authentication | Grafana documentation](https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/gitlab/)
+
+   完成后, 记录下凭据, 填写到集群配置中.
 
 ### SECoder 前后端
 
@@ -168,3 +202,11 @@ gitlab-gitlab-initial-root-password \
   }
 ]
 ```
+
+记得一定要首先登录 root 用户, 密码是 `root`. 然后改掉密码.
+
+### SonarQube
+
+同样, 登录 admin 用户, 密码 `admin`.
+
+记得修改 Permission template.
