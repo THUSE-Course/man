@@ -8,7 +8,7 @@ stages:
     entrypoint: [""]
   stage: deploy
   variables:
-    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox --config /tmp/buildkitd.toml
     BUILDKIT_FRONTEND: dockerfile.v0
     BUILDKIT_CONTEXT: .
     BUILDKIT_DOCKERFILE_DIR: .
@@ -19,6 +19,14 @@ stages:
   before_script:
     - mkdir -p ~/.docker
     - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > ~/.docker/config.json
+    - |
+      cat > /tmp/buildkitd.toml <<'EOF'
+      [registry."docker.io"]
+        insecure = true
+
+      [registry."registry-1.docker.io"]
+        insecure = true
+      EOF
   script:
     - |
       buildctl-daemonless.sh build \
