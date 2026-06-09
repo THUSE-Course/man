@@ -46,7 +46,7 @@ apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration
 apiServer:
   certSANs:
-    - c.secoder.net
+    - c.@@SECODER_BASE_DOMAIN@@
 networking:
   dnsDomain: cluster.local
   podSubnet: 10.16.0.0/12
@@ -74,7 +74,7 @@ kind: ClusterConfiguration
 controlPlaneEndpoint: "[2001:db8:0:0:2::2]:6443"
 apiServer:
   certSANs:
-    - c.secoder.net
+    - c.@@SECODER_BASE_DOMAIN@@
 networking:
   podSubnet: "2001:db8:0:0:3::/96"
   serviceSubnet: "2001:db8:0:0:3:1::/108"

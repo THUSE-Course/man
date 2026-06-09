@@ -1,3 +1,7 @@
 [book]
 title = "SECoder 手册"
 language = "zh"
+
+[preprocessor.secoder-domain]
+command = "bash tools/secoder_domain.sh"
+renderers = ["html"]

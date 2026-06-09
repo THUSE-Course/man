@@ -47,7 +47,7 @@ metadata:
   name: route
 spec:
   hostnames:
-    - test-u-2026000000.secoder.net
+    - test-u-2026000000.@@SECODER_BASE_DOMAIN@@
 ```
 
 ### `frontend.yaml`: 添加环境变量
