@@ -1,10 +1,52 @@
-include:
-  - remote: "https://raw.githubusercontent.com/THUSE-Course/secoder-tmpl/master/gitlab-ci/buildkit.yml"
-  - remote: "https://raw.githubusercontent.com/THUSE-Course/secoder-tmpl/master/gitlab-ci/kustomize.yml"
-
 stages:
   - build
   - deploy
+
+.buildkit:
+  image:
+    name: moby/buildkit:rootless
+    entrypoint: [""]
+  stage: deploy
+  variables:
+    BUILDKITD_FLAGS: --oci-worker-no-process-sandbox
+    BUILDKIT_FRONTEND: dockerfile.v0
+    BUILDKIT_CONTEXT: .
+    BUILDKIT_DOCKERFILE_DIR: .
+    BUILDKIT_IMAGE_NAME: $CI_REGISTRY_IMAGE
+    BUILDKIT_IMAGE_TAG: $CI_COMMIT_SHA
+    BUILDKIT_OUTPUT_TYPE: image
+    BUILDKIT_PUSH: "true"
+  before_script:
+    - mkdir -p ~/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > ~/.docker/config.json
+  script:
+    - |
+      buildctl-daemonless.sh build \
+        --frontend "${BUILDKIT_FRONTEND}" \
+        --local context="${BUILDKIT_CONTEXT}" \
+        --local dockerfile="${BUILDKIT_DOCKERFILE_DIR}" \
+        --output type="${BUILDKIT_OUTPUT_TYPE}",name="${BUILDKIT_IMAGE_NAME}:${BUILDKIT_IMAGE_TAG}",push="${BUILDKIT_PUSH}"
+
+.kustomize:
+  image:
+    name: alpine/k8s:1.35.1
+    entrypoint: [""]
+  stage: deploy
+  variables:
+    KUSTOMIZE_PATH: .
+  script:
+    - |
+      set -eu
+      : "${TOKEN:?TOKEN is required}"
+      : "${KUBERNETES_SERVICE_HOST:?not running in k8s?}"
+      : "${KUBERNETES_SERVICE_PORT:?not running in k8s?}"
+      export KUBECTL_APPLYSET=true
+      kubectl \
+        --token="${TOKEN}" \
+        -n "${NAMESPACE}" \
+        apply -k "${KUSTOMIZE_PATH:-.}" \
+        --applyset="gitops-ci-${CI_PROJECT_PATH_SLUG:-unknown}" \
+        --prune
 
 build-image:
   extends: .buildkit
