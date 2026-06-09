@@ -1,0 +1,26 @@
+include:
+  - remote: "https://raw.githubusercontent.com/THUSE-Course/secoder-tmpl/master/gitlab-ci/buildkit.yml"
+  - remote: "https://raw.githubusercontent.com/THUSE-Course/secoder-tmpl/master/gitlab-ci/kustomize.yml"
+
+stages:
+  - build
+  - deploy
+
+build-image:
+  extends: .buildkit
+  stage: build
+  variables:
+    BUILDKIT_IMAGE_TAG: $CI_COMMIT_SHA
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+deploy:
+  extends: .kustomize
+  needs:
+    - build-image
+  variables:
+    KUSTOMIZE_PATH: deploy
+  before_script:
+    - sed -i "s|u-root-man:latest|${CI_REGISTRY_IMAGE}:${CI_COMMIT_SHA}|g" deploy/deployment.yaml
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

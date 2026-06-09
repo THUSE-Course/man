@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: man
+spec:
+  selector:
+    app.kubernetes.io/name: man
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -16,9 +16,9 @@ if ! command -v jq >/dev/null 2>&1; then
   exit 1
 fi
 
-base_domain="${SECODER_BASE_DOMAIN:-secoder.net}"
+base_domain="${SECODER_BASE_DOMAIN:-t.secoder.net}"
 if [[ -z "${base_domain//[[:space:]]/}" ]]; then
-  base_domain="secoder.net"
+  base_domain="t.secoder.net"
 fi
 
 jq --arg base_domain "$base_domain" '

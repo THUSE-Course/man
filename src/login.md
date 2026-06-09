@@ -4,7 +4,7 @@
 
 ## 访问登录页面
 
-在浏览器中打开 [https://t.@@SECODER_BASE_DOMAIN@@](https://t.@@SECODER_BASE_DOMAIN@@),
+在浏览器中打开 [https://@@SECODER_BASE_DOMAIN@@](https://@@SECODER_BASE_DOMAIN@@),
 系统会自动跳转到登录页面.
 
 <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
