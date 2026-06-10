@@ -12,6 +12,8 @@ spec:
       labels:
         app.kubernetes.io/name: man
     spec:
+      imagePullSecrets:
+        - name: registry-pull-secret
       containers:
         - name: nginx
           image: u-root-man:latest

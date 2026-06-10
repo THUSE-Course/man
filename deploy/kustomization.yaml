@@ -1,4 +1,5 @@
 resources:
   - deployment.yaml
+  - registry-pull-secret.yaml
   - service.yaml
   - route.yaml
