@@ -104,6 +104,35 @@ deploy:
   extends: .kustomize
 ```
 
+## 使用 BuildKit 缓存
+
+如果项目用 BuildKit 构建镜像, 可以把缓存导出到同一个 GitLab Container
+Registry. 这样第一次 Pipeline 会创建缓存, 后续 Pipeline 会复用 Dockerfile
+前面没有变化的层, 例如依赖安装步骤.
+
+在 `.gitlab-ci.yml` 的 BuildKit 作业中增加一个缓存镜像引用:
+
+```yaml
+variables:
+  BUILDKIT_CACHE_REF: $CI_REGISTRY_IMAGE:buildcache
+```
+
+然后在 `buildctl-daemonless.sh build` 命令里同时导入和导出缓存:
+
+```sh
+buildctl-daemonless.sh build \
+  --frontend "${BUILDKIT_FRONTEND}" \
+  --local context="${BUILDKIT_CONTEXT}" \
+  --local dockerfile="${BUILDKIT_DOCKERFILE_DIR}" \
+  --import-cache type=registry,ref="${BUILDKIT_CACHE_REF}" \
+  --export-cache type=registry,ref="${BUILDKIT_CACHE_REF}",mode=max \
+  --output type="${BUILDKIT_OUTPUT_TYPE}",name="${BUILDKIT_IMAGE_NAME}:${BUILDKIT_IMAGE_TAG}",push="${BUILDKIT_PUSH}"
+```
+
+缓存和最终镜像使用同一个 Registry 登录信息, 因此通常不需要额外配置凭据.
+如果多个分支都会构建, 可以把缓存引用改成
+`$CI_REGISTRY_IMAGE:buildcache-$CI_COMMIT_REF_SLUG`, 避免不同分支互相覆盖缓存.
+
 ## 本地预览合成结果
 
 在提交前, 建议先在本地预览:
