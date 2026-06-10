@@ -87,9 +87,13 @@ spec:
 SECoder 模板的 CI 文件位于:
 [secoder-tmpl/gitlab-ci](https://github.com/THUSE-Course/secoder-tmpl/blob/master/gitlab-ci/kustomize.yml)
 
+由于 GitLab Runner 访问外部网络不稳定, 不要在 `.gitlab-ci.yml` 中使用
+`include:` 远程引用这些模板. 请打开对应的模板 YAML 文件, 将内容直接复制到
+项目 `.gitlab-ci.yml` 中, 再定义自己的作业.
+
 通常做法是:
 
-1. 在项目 `.gitlab-ci.yml` 中 `include` 模板
+1. 将需要的模板 YAML 内容内联复制到项目 `.gitlab-ci.yml`
 2. 新建一个作业 `extends: .kustomize`
 3. 设置 `KUSTOMIZE_PATH` 指向你的 `kustomization.yaml` 所在目录
 4. 提交代码后, GitLab Pipeline 自动执行部署
@@ -97,8 +101,26 @@ SECoder 模板的 CI 文件位于:
 示例:
 
 ```yaml
-include:
-  - remote: "https://raw.githubusercontent.com/THUSE-Course/secoder-tmpl/master/gitlab-ci/kustomize.yml"
+.kustomize:
+  image:
+    name: alpine/k8s:1.35.1
+    entrypoint: [""]
+  stage: deploy
+  variables:
+    KUSTOMIZE_PATH: .
+  script:
+    - |
+      set -eu
+      : "${TOKEN:?TOKEN is required}"
+      : "${KUBERNETES_SERVICE_HOST:?not running in k8s?}"
+      : "${KUBERNETES_SERVICE_PORT:?not running in k8s?}"
+      export KUBECTL_APPLYSET=true
+      kubectl \
+        --token="${TOKEN}" \
+        -n "${NAMESPACE}" \
+        apply -k "${KUSTOMIZE_PATH:-.}" \
+        --applyset="gitops-ci-${CI_PROJECT_PATH_SLUG:-unknown}" \
+        --prune
 
 deploy:
   extends: .kustomize
