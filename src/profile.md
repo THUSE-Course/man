@@ -46,7 +46,7 @@
 
 ## 管理 API 令牌
 
-API 令牌用于通过编程方式访问 SECoder 平台的 API 接口.
+API 令牌用于通过编程方式访问 SECoder 平台的 API 接口, 也可用于生成访问 SECoder Kubernetes 集群的 kubectl 配置.
 
 ### 显示令牌
 
@@ -61,10 +61,46 @@ API 令牌用于通过编程方式访问 SECoder 平台的 API 接口.
 
 令牌显示后, **复制令牌** 按钮将变为可用状态. 点击该按钮可以将令牌复制到剪贴板, 方便你在代码或 API 工具中使用.
 
+### 下载 kubectl 配置
+
+点击 **下载 kubectl 配置** 按钮, 阅读并确认凭据安全提示后, 浏览器会下载一个 `u-<你的用户 ID>.kubeconfig` 文件. 该文件已经包含访问 SECoder Kubernetes 集群所需的 API 地址, 用户令牌, 当前上下文和你的默认命名空间.
+
+下载后可以通过以下任一方式使用:
+
+1. 临时指定该配置文件执行 kubectl 命令:
+
+   ```bash
+   KUBECONFIG=/path/to/u-<你的用户 ID>.kubeconfig kubectl get pods
+   ```
+
+2. 在当前 shell 会话中设置环境变量:
+
+   ```bash
+   export KUBECONFIG=/path/to/u-<你的用户 ID>.kubeconfig
+   kubectl get pods
+   kubectl get services
+   ```
+
+3. 如果你希望长期使用, 可以将该配置合并到本机默认 kubeconfig 中:
+
+   ```bash
+   mkdir -p ~/.kube
+   KUBECONFIG=~/.kube/config:/path/to/u-<你的用户 ID>.kubeconfig kubectl config view --flatten > /tmp/secoder-kubeconfig
+   mv /tmp/secoder-kubeconfig ~/.kube/config
+   chmod 600 ~/.kube/config
+   ```
+
+配置文件默认会切换到你的个人命名空间, 因此通常可以直接执行 `kubectl get pods`, `kubectl apply -f deployment.yaml` 等命令. 如果需要确认当前上下文和命名空间, 可以运行:
+
+```bash
+kubectl config current-context
+kubectl config view --minify --output 'jsonpath={..namespace}'; echo
+```
+
 **安全提示**:
-- API 令牌等同于你的账户密码, 请妥善保管
-- 不要将令牌分享给他人或公开发布在代码仓库中
-- 如果令牌泄露, 请立即联系管理员重置
+- API 令牌和下载的 kubectl 配置等同于你的账户密码, 请妥善保管
+- 不要将令牌或 kubectl 配置分享给他人, 也不要公开发布在代码仓库中
+- 如果令牌或 kubectl 配置泄露, 请立即联系管理员重置
 
 ## 同步 GitLab 子组
 
