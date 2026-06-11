@@ -3,6 +3,9 @@
 SECoder 是软件工程课程所使用的开发平台, 它将服务同学们的小作业与大作业部署,
 并且通过开源项目 GitLab 托管代码.
 
+如需通过脚本或 API 工具调用 SECoder 后端接口, 可参考
+[SECoder API 使用说明](https://@@SECODER_BASE_DOMAIN@@/api/AGENTS.md).
+
 ## 注册平台并激活账号
 
 从助教处获得平台的初始密码后, 请前往
