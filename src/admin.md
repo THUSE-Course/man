@@ -21,7 +21,7 @@ SECoder 既可以指整个包含 Kubernetes 集群在内的平台,
 ### Kubernetes 集群
 
 新版本 SECoder 的开发在 2026 年初完成, 使用 Debian 13 以及当时的最新 Kubernetes
-版本 1.35, 但一般来说, 版本并不重要, 可以更新.
+版本 1.36, 但一般来说, 版本并不重要, 可以更新.
 
 经过实验, 纯 IPv6 的集群也可以正常工作, 只需要提供合适的 DNS64 与 NAT64.
 
@@ -31,9 +31,22 @@ SECoder 既可以指整个包含 Kubernetes 集群在内的平台,
 
 `kubeadm` 可以通过配置文件首先启动一个控制面, 考虑课程的需要,
 部署单个控制面节点 (分配 4c4g) 即可.
+在这之外, 部署至少一个工作节点. 以下说明以 IPv4 单栈集群为准.
 
-在这之外, 部署至少一个工作节点.
-通过以下配置和命令初始化控制面节点 (称为 node):
+所有节点需要启用 Kubernetes 所需的内核转发参数:
+
+```sh
+cat >/etc/sysctl.d/k8s-net.conf <<'EOF'
+net.ipv4.ip_forward = 1
+EOF
+sysctl --system
+```
+
+如果系统启用了 swap, 还需要关闭 swap 并从 `/etc/fstab` 中删除对应挂载.
+确认 `containerd` 与 `kubelet` 已经安装并启动后, 在控制面节点准备
+`kubeadm.conf`. 其中 `advertiseAddress` 与 `controlPlaneEndpoint`
+应当填写控制面节点的固定内网地址; `podSubnet` 与 `serviceSubnet`
+必须互不重叠, 并且不能与节点所在网段冲突.
 
 ```yaml
 apiVersion: kubeadm.k8s.io/v1beta4
@@ -41,6 +54,8 @@ kind: InitConfiguration
 localAPIEndpoint:
   advertiseAddress: 10.128.1.111
   bindPort: 6443
+skipPhases:
+  - addon/kube-proxy
 ---
 apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration
@@ -49,17 +64,112 @@ apiServer:
     - c.@@SECODER_BASE_DOMAIN@@
 networking:
   dnsDomain: cluster.local
-  podSubnet: 10.16.0.0/12
-  serviceSubnet: 10.32.0.0/12
+  podSubnet: 100.64.0.0/17
+  serviceSubnet: 100.64.128.0/17
 controlPlaneEndpoint: 10.128.1.111:6443
 clusterName: secoder
 ---
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
-maxPods: 512
+maxPods: 1024
 ```
 
-或者 IPv6 单栈:
+这里跳过 `addon/kube-proxy`, 是因为 SECoder 默认使用 Cilium 的
+kube-proxy replacement. 使用以下命令初始化控制面:
+
+```sh
+kubeadm init --config kubeadm.conf
+```
+
+初始化成功后, 为管理员配置 kubeconfig. 如果正在使用 root 用户,
+可以直接执行:
+
+```sh
+export KUBECONFIG=/etc/kubernetes/admin.conf
+```
+
+如果使用普通用户, 则复制 kubeconfig:
+
+```sh
+mkdir -p "$HOME/.kube"
+sudo cp -i /etc/kubernetes/admin.conf "$HOME/.kube/config"
+sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
+```
+
+此时控制面组件已经启动, 但网络插件尚未安装, 因而节点显示为
+`NotReady`, CoreDNS 显示为 `Pending` 是正常现象. 接下来安装 Cilium.
+首先添加 Helm 仓库:
+
+```sh
+helm repo add cilium https://helm.cilium.io/
+helm repo update
+```
+
+随后创建 `cilium.yaml`. `k8sServiceHost` 应当与 kubeadm 配置中的
+控制面地址一致, `devices` 应当填写节点承载集群流量的网卡名,
+`ipv4NativeRoutingCIDR` 应当与 `podSubnet` 一致.
+
+```yaml
+ipam:
+  mode: kubernetes
+ipv4:
+  enabled: true
+ipv6:
+  enabled: false
+operator:
+  replicas: 1
+k8sServiceHost: "10.128.1.111"
+k8sServicePort: 6443
+kubeProxyReplacement: true
+routingMode: native
+autoDirectNodeRoutes: true
+devices: "eth0"
+ipv4NativeRoutingCIDR: "100.64.0.0/17"
+bpf:
+  lbExternalClusterIP: true
+```
+
+安装 Cilium:
+
+```sh
+helm install cilium cilium/cilium \
+  --namespace kube-system \
+  --values cilium.yaml
+```
+
+等待 Cilium 与 CoreDNS 启动完成后, 控制面节点应当变为 `Ready`:
+
+```sh
+kubectl get pods -A
+kubectl get nodes -o wide
+```
+
+最后, 在每个工作节点上执行控制面初始化时输出的加入命令:
+
+```sh
+kubeadm join 10.128.1.111:6443 \
+  --token <token> \
+  --discovery-token-ca-cert-hash sha256:<hash>
+```
+
+如果初始化时输出的 token 已经过期, 可以在控制面节点重新生成:
+
+```sh
+kubeadm token create --print-join-command
+```
+
+所有工作节点加入后, 再次确认节点状态:
+
+```sh
+kubectl get nodes -o wide
+kubectl get pods -A
+```
+
+所有节点都处于 `Ready` 状态, 且 `kube-system` 命名空间中的 Cilium,
+CoreDNS 和控制面组件都正常运行后, Kubernetes 集群的 bootstrap
+就完成了.
+
+如果部署 IPv6 单栈集群, kubeadm 配置可参考:
 
 ```yaml
 apiVersion: kubeadm.k8s.io/v1beta4
@@ -67,6 +177,8 @@ kind: InitConfiguration
 localAPIEndpoint:
   advertiseAddress: "2001:db8:0:0:2::2"
   bindPort: 6443
+skipPhases:
+  - addon/kube-proxy
 ---
 apiVersion: kubeadm.k8s.io/v1beta4
 clusterName: tunet
@@ -87,6 +199,9 @@ apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 maxPods: 512
 ```
+
+IPv6 单栈还需要启用 `net.ipv6.conf.all.forwarding = 1`,
+并且仍然需要安装 CNI 后节点才会进入 `Ready` 状态.
 
 ### FluxCD
 
