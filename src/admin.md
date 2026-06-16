@@ -209,6 +209,63 @@ IPv6 单栈还需要启用 `net.ipv6.conf.all.forwarding = 1`,
 FluxCD 是将配置文件同步为集群资源的有力工具. 管理员需要[下载 `flux`
 工具](https://github.com/fluxcd/flux2/releases)以便初始化 FluxCD.
 
+开始前, 确认 Kubernetes 集群已经就绪, 当前 shell 的 kubeconfig
+可以访问集群:
+
+```sh
+kubectl get nodes
+flux check --pre
+```
+
+下面的 `flux bootstrap git` 是通用 Git 仓库的模板, 适合自建 Git
+服务或者不希望依赖代码托管平台 API 的场景. 如果实际部署使用 GitHub,
+GitLab, Gitea 等平台, 应当参考 FluxCD 对应的平台模板, 例如
+`flux bootstrap github`, `flux bootstrap gitlab` 或
+`flux bootstrap gitea`, 并按照平台要求准备 token, owner,
+repository, deploy key 等参数. 这些模板的认证方式不同, 但目标一致:
+在 Git 仓库中提交 FluxCD 组件和同步配置, 并让集群持续同步指定目录.
+
+使用通用 Git 模板时, 管理员需要先准备一个保存集群配置的仓库, 例如
+`secoder-cluster`, 并准备一把对该仓库有读写权限的 SSH 私钥. 对应公钥
+需要提前加入 Git 服务端的仓库权限或者部署密钥中.
+
+随后在控制面节点执行:
+
+```sh
+flux bootstrap git \
+  --url=ssh://git@<git-host>/path/to/secoder-cluster \
+  --branch=master \
+  --private-key-file="$HOME/.ssh/id_ed25519" \
+  --path=clusters/secoder
+```
+
+其中 `--url` 应当使用完整的 SSH URL, `--branch` 填写仓库实际使用的分支,
+`--private-key-file` 指向有仓库读写权限的私钥, `--path` 是集群配置在
+仓库中的目录. SECoder 默认使用 `clusters/secoder`.
+
+命令完成后, FluxCD 会在仓库中提交组件清单和同步清单, 并在集群中创建
+`flux-system` 命名空间, 安装 `source-controller`,
+`kustomize-controller`, `helm-controller`, `notification-controller`
+等组件. 它还会创建指向 Git 仓库的 `GitRepository` 和负责应用
+`clusters/secoder` 的 `Kustomization`.
+
+使用以下命令确认 bootstrap 成功:
+
+```sh
+kubectl get pods -n flux-system
+flux get sources git -A
+flux get kustomizations -A
+```
+
+FluxCD 的控制器 Pod 应当全部处于 `Running` 状态, Git source 和
+Kustomization 应当处于 `Ready` 状态. 后续修改集群配置时, 将变更提交到
+Git 仓库的 `clusters/secoder` 目录即可. 如果需要立即触发同步, 可以执行:
+
+```sh
+flux reconcile source git flux-system -n flux-system
+flux reconcile kustomization flux-system -n flux-system
+```
+
 ### GitLab
 
 因为 GitLab 的 Helm Chart 所能覆盖的配置有限, 在确认 GitLab 正确启动后,
