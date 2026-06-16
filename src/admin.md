@@ -68,6 +68,12 @@ networking:
   serviceSubnet: 100.64.128.0/17
 controlPlaneEndpoint: 10.128.1.111:6443
 clusterName: secoder
+controllerManager:
+  extraArgs:
+    - name: "node-cidr-mask-size"
+      value: "20"
+    - name: "allocate-node-cidrs"
+      value: "true"
 ---
 apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
@@ -169,6 +175,12 @@ kubectl get pods -A
 CoreDNS 和控制面组件都正常运行后, Kubernetes 集群的 bootstrap
 就完成了.
 
+控制节点默认是不调度工作负载的, 可以让控制节点运行工作负载:
+
+```sh
+kubectl taint node secoder0 node-role.kubernetes.io/control-plane:NoSchedule-
+```
+
 如果部署 IPv6 单栈集群, kubeadm 配置可参考:
 
 ```yaml
@@ -259,7 +271,7 @@ flux get kustomizations -A
 
 FluxCD 的控制器 Pod 应当全部处于 `Running` 状态, Git source 和
 Kustomization 应当处于 `Ready` 状态. 后续修改集群配置时, 将变更提交到
-Git 仓库的 `clusters/secoder` 目录即可. 如果需要立即触发同步, 可以执行:
+Git 仓库即可. 如果需要立即触发同步, 可以执行:
 
 ```sh
 flux reconcile source git flux-system -n flux-system
