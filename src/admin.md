@@ -229,7 +229,52 @@ kubectl get nodes
 flux check --pre
 ```
 
-下面的 `flux bootstrap git` 是通用 Git 仓库的模板, 适合自建 Git
+为了部署该实例版本, 记得查看 FluxCD 仓库下的 `overlays` 文件夹, 特别理解
+`overlays/secoder-infra*/`, `overlays/secoder-mon*/`. 管理员应当至少查看
+`overlays` 下的所有文件, 以了解自己部署的是什么东西.
+
+例如, 查看 `overlays/secoder-infra-pre/csi-driver-nfs/values.yaml`, 可以看到:
+
+```yaml
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: csi-driver-nfs
+spec:
+  values:
+    storageClasses:
+      - name: nfs-retain
+        parameters:
+          server: "10.128.1.111"
+          share: /retain
+          mountPermissions: "0777"
+        reclaimPolicy: Delete
+        volumeBindingMode: Immediate
+        mountOptions:
+          - nfsvers=4.2
+      - name: nfs-tmp
+        parameters:
+          server: "10.128.1.111"
+          share: /tmp
+          mountPermissions: "0777"
+        reclaimPolicy: Retain
+        volumeBindingMode: Immediate
+        mountOptions:
+          - nfsvers=4.2
+```
+
+在部署时, 一定注意准备需要的 NFS server, 否则会遇到 PVC 无法绑定成功, 不断重试.
+
+推荐采用如下配置的 NFS server (async 是很重要的, 因为 GitLab CI 的任务也在 NFS
+上跑, sync 会显著影响在 CI 上的编译的性能):
+
+```
+cat /etc/exports
+
+/srv 172.30.20.10/24(rw,fsid=0,async,no_subtree_check,sec=sys,no_root_squash)
+```
+
+下面的 `flux bootstrap git` 是通用 Git 仓库的模板 (需要 SSH 端口), 适合自建 Git
 服务或者不希望依赖代码托管平台 API 的场景. 如果实际部署使用 GitHub,
 GitLab, Gitea 等平台, 应当参考 FluxCD 对应的平台模板, 例如
 `flux bootstrap github`, `flux bootstrap gitlab` 或
