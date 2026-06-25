@@ -336,18 +336,18 @@ gitlab-gitlab-initial-root-password \
 -o jsonpath="{.data.password}" | base64 -d
 ```
 
+1. 抄写 root 用户的 email
+
+   把 GitLab root 用户的 email 抄写下来, 然后将其设置为 SECoder 的 root 用户的
+   email. 目的是让 SECoder 的 root 用户同样登录 gitlab 的 root 用户.
+
+   **做完这一步之后必须用 SECoder 的 root 登录一次 GitLab, 不然禁止 GitLab 密码登录后就无法再登录 GitLab 了**.
+
 1. 允许 PAT 过期
 
    进入 `Admin > Settings > General > Account and limit`,
    - 禁用 `Access token expiration`
    - 禁用 `Allow new users to create top-level groups`
-
-   点击 `Save changes` 保存选择.
-
-1. 允许 PAT 过期
-
-   进入 `Admin > Settings > General > Account and limit`,
-   - 禁用 `Access token expiration`
 
    点击 `Save changes` 保存选择.
 
@@ -361,7 +361,7 @@ gitlab-gitlab-initial-root-password \
 1. 禁止密码登录
 
    进入 `Admin > Settings > General > Sign-in restrictions`
-   - 启用 `Allow password authentication for the web interface`
+   - 禁用 `Allow password authentication for the web interface`
      (必须, 否则 root 用户无法登录)
    - 禁用 `Allow password authentication for Git over HTTP(S)`
    - 启用 `Disable password authentication for users with an SSO identity`
