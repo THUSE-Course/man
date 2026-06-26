@@ -378,6 +378,13 @@ gitlab-gitlab-initial-root-password \
 
    同样注意保存设置
 
+1. 设置项目默认可见性
+
+   进入 `Admin > Settings > General > Visibility and access controls`
+   - 设置 `Default project visibility` 为 `Private`
+
+   同样注意保存设置
+
 1. 配置 CI/CD
 
    进入 `Admin > Settings > CI/CD > Continuous Integration and Deployment`
