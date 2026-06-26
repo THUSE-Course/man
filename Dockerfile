@@ -1,10 +1,6 @@
-FROM rust:bookworm AS build
+FROM peaceiris/mdbook:v0.5.0 AS build
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends jq \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN cargo install mdbook --version 0.4.52 --locked
+RUN apk add --no-cache bash jq
 
 WORKDIR /app
 
