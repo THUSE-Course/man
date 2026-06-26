@@ -493,14 +493,19 @@ gitlab-gitlab-initial-root-password \
 
 打开 `https://sonar.@@SECODER_BASE_DOMAIN@@/admin/settings`, 设置 `sonar.core.serverBaseURL` 为 `https://sonar.@@SECODER_BASE_DOMAIN@@`.
 
+打开 `https://sonar.@@SECODER_BASE_DOMAIN@@/admin/projects_management`,
+
+修改 Default visibility of new projects 为 Private.
+
 打开 `https://sonar.@@SECODER_BASE_DOMAIN@@/admin/permission_templates`,
+
 修改 Default Permission Template, 将它改成如下的设置:
 
-| | Browse | See Source Code | Administer Issues | Administer Security Hotspots | Administer | Execute Anaylysis |
-| | --- | --- | --- | --- | --- | --- | --- |
-| sonar-adminstrators | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| Group | Browse | See Source Code | Administer Issues | Administer Security Hotspots | Administer | Execute Analysis |
+| --- | --- | --- | --- | --- | --- | --- |
+| sonar-administrators | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | sonar-users | Yes | No | No | No | No | No | No |
-| Creators | Yes | Yes | Yes | Yse | Yes | Yes | Yes |
+| Creators | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 
 然后为 GitLab 配置登录:
 
