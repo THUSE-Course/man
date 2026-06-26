@@ -116,23 +116,23 @@ helm repo update
 `ipv4NativeRoutingCIDR` 应当与 `podSubnet` 一致.
 
 ```yaml
+autoDirectNodeRoutes: true
+bpf:
+  lbExternalClusterIP: true
+devices: eth0
 ipam:
   mode: kubernetes
 ipv4:
   enabled: true
+ipv4NativeRoutingCIDR: 100.64.0.0/17 # 要包含 Pod network CIDR
 ipv6:
   enabled: false
-operator:
-  replicas: 1
-k8sServiceHost: "10.128.1.111"
+k8sServiceHost: 10.128.1.111 # 填写 ApiServer 的 IP
 k8sServicePort: 6443
 kubeProxyReplacement: true
+operator:
+  replicas: 1
 routingMode: native
-autoDirectNodeRoutes: true
-devices: "eth0"
-ipv4NativeRoutingCIDR: "100.64.0.0/17"
-bpf:
-  lbExternalClusterIP: true
 ```
 
 安装 Cilium:
@@ -180,6 +180,52 @@ CoreDNS 和控制面组件都正常运行后, Kubernetes 集群的 bootstrap
 ```sh
 kubectl taint node secoder0 node-role.kubernetes.io/control-plane:NoSchedule-
 ```
+
+注意, 每个节点加入后, 使用 `kubectl describe <nodename>`
+来查看集群给该节点分配了哪个 Pod Network CIDR. 随后在每个节点上配置对应路由,
+例如在节点 `.10` 上:
+
+```
+[Match]
+Name=eth0
+
+[Network]
+Address=172.30.20.10/24
+Gateway=172.30.20.1
+DNS=172.30.20.1
+
+[Route]
+Destination=100.64.32.0/20
+Gateway=172.30.20.12
+# 100.64.32.0/20 这个 Pod Network CIDR 在 172.30.20.12 机器上
+
+[Route]
+Destination=100.64.16.0/20
+Gateway=172.30.20.11
+```
+
+在节点 `.12` 上:
+
+```
+[Match]
+Name=eth0
+
+[Network]
+Address=172.30.20.11/24
+Gateway=172.30.20.1
+
+[Route]
+Destination=100.64.32.0/20
+Gateway=172.30.20.12
+
+[Route]
+Destination=100.64.0.0/20
+Gateway=172.30.20.10
+```
+
+虽然 cilium 理论上能通过二层发现自动学到这个路由. 但如果未来要配置三层可达的路由, 就可以这么办.
+
+### IPv6
 
 如果部署 IPv6 单栈集群, kubeadm 配置可参考:
 
@@ -323,6 +369,11 @@ flux reconcile source git flux-system -n flux-system
 flux reconcile kustomization flux-system -n flux-system
 ```
 
+### 反代
+
+反代通过 traefik 的 Cluster VIP 暴露. 如果选择 再套一层 nginx, 用 Termintate TLS
+反代 trafik, 记得调整 nginx 的 `max-body-szie`.
+
 ### GitLab
 
 因为 GitLab 的 Helm Chart 所能覆盖的配置有限, 在确认 GitLab 正确启动后,
@@ -448,7 +499,8 @@ gitlab-gitlab-initial-root-password \
 | | Browse | See Source Code | Administer Issues | Administer Security Hotspots | Administer | Execute Anaylysis |
 | | --- | --- | --- | --- | --- | --- | --- |
 | sonar-adminstrators | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
-| sonar-users | Yes | No | No | No | No | Yes | Yes |
+| sonar-users | Yes | No | No | No | No | No | No |
+| Creators | Yes | Yes | Yes | Yse | Yes | Yes | Yes |
 
 然后为 GitLab 配置登录:
 
