@@ -415,30 +415,27 @@ gitlab-gitlab-initial-root-password \
 
    完成后, 记录下凭据, 填写到集群配置中.
 
-### SECoder 前后端
+### SECoder 使用
 
-助教配置后端时, 需准备学期内选课学生的学号与初始密码, 格式为:
+首先登录 root 用户, 密码是 `root`. 然后改掉密码.
 
-```json
-[
-  {
-    "id": "2001",
-    "passwd": "Bfwae"
-  },
-  {
-    "id": "2002",
-    "passwd": "Afaewab"
-  }
-]
+助教配置后端时, 需准备学期内选课学生的学号与初始密码, 格式为纯文本每行一个
+(注意用 Unicode 编码):
+
+```
+197011201:123456
+19701121:123456
 ```
 
-记得一定要首先登录 root 用户, 密码是 `root`. 然后改掉密码.
+这些添加过的学号允许注册, 其他未添加的不可以注册 SECoder. 允许多次添加.
 
 ### SonarQube
 
 同样, 登录 admin 用户, 密码 `admin`. 第一次登录后会要求改密码.
 
-记得打开 `https://sonar.@@SECODER_BASE_DOMAIN@@/admin/permission_templates`,
+打开 `https://sonar.@@SECODER_BASE_DOMAIN@@/admin/settings`, 设置 `sonar.core.serverBaseURL` 为 `https://sonar.@@SECODER_BASE_DOMAIN@@`.
+
+打开 `https://sonar.@@SECODER_BASE_DOMAIN@@/admin/permission_templates`,
 修改 Default Permission Template, 将它改成如下的设置:
 
 | | Browse | See Source Code | Administer Issues | Administer Security Hotspots | Administer | Execute Anaylysis |
@@ -450,3 +447,5 @@ gitlab-gitlab-initial-root-password \
 
 打开
 `https://sonar.@@SECODER_BASE_DOMAIN@@/admin/settings?category=authentication&tab=gitlab`, 参照指引 (一般来说是, 是 SonarQube 的线上文档) 配置 GitLab 作为鉴权提供者. GitLab 那里依次填写 `https://sonar.@@SECODER_BASE_DOMAIN@@/oauth2/callback/gitlab` (rediret url), `Confidential`, `api`. 然后在 SonarQube 那里配置 Application ID, GitLab URL 为 `https://gitlab.@@SECODER_BASE_DOMAIN@@`, 启用 `Synchronize user groups`. 填完这些后, 记得启用 `Allow users to sign up`, `Allowed groups` 留空.
+
+接下来, 允许登录到 SonarQube 的用户从 GitLab 中导入项目 (这一步需要管理员提供一个 `api` 权限的 Personal Access Token`, 可以复用之前的), 届时使用 SECoder 的学生将独立导入他们的项目.
