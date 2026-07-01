@@ -155,6 +155,23 @@ buildctl-daemonless.sh build \
 如果多个分支都会构建, 可以把缓存引用改成
 `$CI_REGISTRY_IMAGE:buildcache-$CI_COMMIT_REF_SLUG`, 避免不同分支互相覆盖缓存.
 
+## 使用 npm 缓存源
+
+SECoder 提供 npm 代理缓存源, 上游为 `https://registry.npmmirror.com/`.
+在 CI 或本地项目中可以配置:
+
+```ini
+registry=https://npm-registry.@@SECODER_BASE_DOMAIN@@/
+```
+
+npm, pnpm 和 Yarn 都可以使用同一个地址:
+
+```sh
+npm install --registry https://npm-registry.@@SECODER_BASE_DOMAIN@@/
+pnpm install --registry https://npm-registry.@@SECODER_BASE_DOMAIN@@/
+yarn install --registry https://npm-registry.@@SECODER_BASE_DOMAIN@@/
+```
+
 ## 本地预览合成结果
 
 在提交前, 建议先在本地预览:
