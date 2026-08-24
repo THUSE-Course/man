@@ -3,7 +3,7 @@
 SECoder 既可以指整个包含 Kubernetes 集群在内的平台,
 也可以指集群中负责用户管理的前后端.
 
-没有特别说明的话, 部署 SECdoer 的含义是配置并调试集群在内的整个平台.
+没有特别说明的话, 部署 SECoder 的含义是配置并调试集群在内的整个平台.
 
 ## 部署 SECoder
 
@@ -14,14 +14,17 @@ SECoder 既可以指整个包含 Kubernetes 集群在内的平台,
   在这样的配置下 SECoder 才能够路由用户的部署业务并且对
   GitLab SSH 协议的 TCP 流量进行转发.
 - NFS 存储
-- SECoder 域名的 DNS 编辑权限. Kubernetes 集群的 cert-manager
-  可以方便地自动更新证书并且保证服务不中断
-- 至少两台虚拟机
+- SECoder 域名的 DNS 编辑权限, 以及内外两层 TLS 证书的签发和续期能力.
+  只有实际部署并配置了 cert-manager 时, 才能认为集群内证书会自动续期.
+- 推荐至少两台虚拟机 (控制面和工作节点分离). 单节点部署也可运行,
+  但控制面、入口和所有有状态依赖会同时失效, 不属于高可用部署.
 
 ### Kubernetes 集群
 
-新版本 SECoder 的开发在 2026 年初完成, 使用 Debian 13 以及当时的最新 Kubernetes
-版本 1.36, 但一般来说, 版本并不重要, 可以更新.
+新版本 SECoder 的开发在 2026 年初完成, 使用 Debian 13 和 Kubernetes 1.36.
+部署时应固定 Kubernetes minor 版本的软件源, 同时安装匹配版本的 `kubeadm`,
+`kubelet` 和 `kubectl`; 不要在未检查 CNI、CRI、Gateway API 和 Helm Chart
+兼容性的情况下跨 minor 更新.
 
 经过实验, 纯 IPv6 的集群也可以正常工作, 只需要提供合适的 DNS64 与 NAT64.
 
@@ -43,8 +46,30 @@ sysctl --system
 ```
 
 如果系统启用了 swap, 还需要关闭 swap 并从 `/etc/fstab` 中删除对应挂载.
-确认 `containerd` 与 `kubelet` 已经安装并启动后, 在控制面节点准备
-`kubeadm.conf`. 其中 `advertiseAddress` 与 `controlPlaneEndpoint`
+确认 `containerd` 与 `kubelet` 已经安装后, 配置 containerd 使用 systemd cgroup,
+并使 sandbox image 与当前 kubeadm 完全一致:
+
+```sh
+kubeadm config images list --kubernetes-version v1.36.4
+containerd config dump | grep -E 'sandbox_image|SystemdCgroup'
+crictl info
+```
+
+例如 kubeadm 输出 `registry.k8s.io/pause:3.10.2` 时,
+`/etc/containerd/config.toml` 中也应配置同一个 `sandbox_image`, 随后重启并验证:
+
+```sh
+systemctl restart containerd
+systemctl is-active containerd
+crictl info | grep sandboxImage
+```
+
+Debian 13 当前提供的 containerd 1.7 可以运行 Kubernetes 1.36, 但没有实现 CRI
+`RuntimeConfig` RPC. 在更新到 Kubernetes 1.37 或更高版本之前, 必须先执行
+`crictl runtime-config` 并确认不再返回 `Unimplemented`; 否则先升级容器运行时.
+
+确认运行时与 `kubelet` 已经启动后, 在控制面节点准备 `kubeadm.conf`.
+其中 `advertiseAddress` 与 `controlPlaneEndpoint`
 应当填写控制面节点的固定内网地址; `podSubnet` 与 `serviceSubnet`
 必须互不重叠, 并且不能与节点所在网段冲突.
 
@@ -79,6 +104,12 @@ apiVersion: kubelet.config.k8s.io/v1beta1
 kind: KubeletConfiguration
 maxPods: 1024
 ```
+
+`maxPods` 是 kubelet 对单节点 Pod 数量的上限, 不是按 CPU 或内存推导出的容量.
+在这里的 `/20` 单节点 Pod CIDR 下有足够的地址容纳 1024 个 Pod, 因而单个工作节点
+在配置层面最多承载 1024 个 Pod; 实际可承载数量还要受内存、CPU、PID、端口、
+镜像磁盘和 CNI 状态容量限制. 多节点部署时, 必须同时核对
+`node-cidr-mask-size`、每节点地址数与 `maxPods`.
 
 这里跳过 `addon/kube-proxy`, 是因为 SECoder 默认使用 Cilium 的
 kube-proxy replacement. 使用以下命令初始化控制面:
@@ -127,7 +158,7 @@ ipv4:
 ipv4NativeRoutingCIDR: 100.64.0.0/17 # 要包含 Pod network CIDR
 ipv6:
   enabled: false
-k8sServiceHost: 10.128.1.111 # 填写 ApiServer 的 IP
+k8sServiceHost: 10.128.1.111 # 填写 API Server 的 IP
 k8sServicePort: 6443
 kubeProxyReplacement: true
 operator:
@@ -175,10 +206,11 @@ kubectl get pods -A
 CoreDNS 和控制面组件都正常运行后, Kubernetes 集群的 bootstrap
 就完成了.
 
-控制节点默认是不调度工作负载的, 可以让控制节点运行工作负载:
+控制节点默认是不调度工作负载的. 只有接受单节点非高可用风险时,
+才让控制节点运行工作负载:
 
 ```sh
-kubectl taint node secoder0 node-role.kubernetes.io/control-plane:NoSchedule-
+kubectl taint node <control-plane-node> node-role.kubernetes.io/control-plane:NoSchedule-
 ```
 
 注意, 每个节点加入后, 使用 `kubectl describe <nodename>`
@@ -204,7 +236,7 @@ Destination=100.64.16.0/20
 Gateway=172.30.20.11
 ```
 
-在节点 `.12` 上:
+在节点 `.11` 上:
 
 ```
 [Match]
@@ -294,22 +326,33 @@ spec:
           server: "10.128.1.111"
           share: /retain
           mountPermissions: "0777"
-        reclaimPolicy: Delete
+        reclaimPolicy: Retain
         volumeBindingMode: Immediate
         mountOptions:
           - nfsvers=4.2
+          - noatime
       - name: nfs-tmp
         parameters:
           server: "10.128.1.111"
           share: /tmp
           mountPermissions: "0777"
-        reclaimPolicy: Retain
+        reclaimPolicy: Delete
         volumeBindingMode: Immediate
         mountOptions:
           - nfsvers=4.2
+          - noatime
 ```
 
-在部署时, 一定注意准备需要的 NFS server, 否则会遇到 PVC 无法绑定成功, 不断重试.
+`nfs-retain` 用于需要保留的数据, 因而 PV 的 reclaim policy 必须是 `Retain`;
+`nfs-tmp` 用于可重建数据, reclaim policy 才是 `Delete`. 部署后要检查实际 PV,
+不能只检查 StorageClass 名字:
+
+```sh
+kubectl get storageclass
+kubectl get pv -o custom-columns=NAME:.metadata.name,CLASS:.spec.storageClassName,RECLAIM:.spec.persistentVolumeReclaimPolicy,PHASE:.status.phase
+```
+
+在部署时, 一定注意准备需要的 NFS server, 否则会遇到 PVC 无法绑定成功并不断重试.
 
 推荐采用如下配置的 NFS server (async 是很重要的, 因为 GitLab CI 的任务也在 NFS
 上跑, sync 会显著影响在 CI 上的编译的性能):
@@ -317,8 +360,74 @@ spec:
 ```
 cat /etc/exports
 
-/srv 172.30.20.10/24(rw,fsid=0,async,no_subtree_check,sec=sys,no_root_squash)
+/srv 172.30.20.0/24(rw,fsid=0,async,no_subtree_check,sec=sys,no_root_squash)
 ```
+
+这里的 `/srv` 只是示例. 操作现有环境, 特别是清理或恢复数据之前, 必须先读取
+`/etc/exports`, 再用 `findmnt`, `exportfs -v` 和 `stat` 确认实际 export root、
+子目录和挂载目标; 不得从文档示例推断破坏性操作的路径.
+
+### GitOps 依赖顺序与发布验证
+
+完整部署不是把所有 Kustomization 同时创建即可. 推荐的依赖顺序是:
+
+1. 安装 Gateway API CRD 和 Flux 控制器, 等待 CRD Established;
+2. 安装存储、Traefik 等 `infra-pre` 依赖;
+3. 安装 `infra`, 并等待 Kyverno 和其他 webhook Ready;
+4. 安装 `mon-pre` 与监控组件;
+5. 安装 PostgreSQL、Valkey、Garage 等 `prod-pre` 有状态依赖;
+6. 最后安装 SECoder、GitLab 和 SonarQube 等 `prod` 工作负载.
+
+如果 GitOps 仓库使用 Flux `dependsOn`, 每一步仍应设置明确的 health check,
+不能只依赖对象创建顺序. Gateway API CRD 必须先于引用它们的 Gateway/Route;
+Kyverno 必须先于 SECoder 的生成策略. CloudNativePG 若启用
+`shared_preload_libraries`, 必须先确认镜像中存在对应扩展, 否则 PostgreSQL 会在
+启动阶段反复失败. Garage 第一次启动时, 需要先完成 layout 分配和应用,
+再创建 bucket、key 和依赖它们的 Secret; 只等待 Pod Ready 不代表 layout 已可用.
+
+大型 Chart 第一次冷启动会拉取数百 MB 到 1 GB 以上的镜像. GitLab 和 SonarQube
+的 HelmRelease 应为 install/upgrade 设置足够的超时 (例如 `60m`) 和明确 remediation:
+
+```yaml
+spec:
+  timeout: 60m
+  install:
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+```
+
+如果第一次 install 在正常资源创建前失败, Helm history 可能让后续 reconcile
+错误地走 upgrade 路径并触发 Chart 的升级保护. 先修正超时/remediation, 盘点 PVC、
+数据库和其他独立资源的所有权, 然后只删除并让 Flux 重建对应 HelmRelease,
+以获得真正的 clean install. 不要为此删除 namespace、数据库或独立 PVC.
+
+发布前不仅要检查 HelmRelease values, 还要渲染实际 Chart 资源并断言关键字段.
+至少执行:
+
+```sh
+kubectl kustomize overlays/<target> >/tmp/rendered.yaml
+helm template <release> <repo>/<chart> --version <version> \
+  --namespace <namespace> -f /tmp/effective-values.yaml >/tmp/chart.yaml
+kubeconform -strict -summary -ignore-missing-schemas /tmp/chart.yaml
+kubectl apply --server-side --dry-run=server -f /tmp/rendered.yaml
+```
+
+Chart 大版本会移动 values 路径而不一定报错. 例如 Traefik Chart 41 的
+Kubernetes Service 原生字段位于 `service.spec`; external IP 应写成:
+
+```yaml
+service:
+  spec:
+    externalIPs:
+      - 10.128.1.111
+```
+
+因此还应解析 `/tmp/chart.yaml`, 确认最终 `Service.spec.externalIPs` 等关键字段
+确实存在, 而不是仅确认 HelmRelease 保存了输入值.
 
 下面的 `flux bootstrap git` 是通用 Git 仓库的模板 (需要 SSH 端口), 适合自建 Git
 服务或者不希望依赖代码托管平台 API 的场景. 如果实际部署使用 GitHub,
@@ -371,8 +480,49 @@ flux reconcile kustomization flux-system -n flux-system
 
 ### 反代
 
-反代通过 traefik 的 Cluster VIP 暴露. 如果选择 再套一层 nginx, 用 Termintate TLS
-反代 trafik, 记得调整 nginx 的 `max-body-szie`.
+反代通过 Traefik 的 LoadBalancer/External IP 暴露. 如果外层再部署 Nginx 并在
+Nginx 终止 TLS, 需要单独维护外层证书、到 Traefik 的 upstream, 以及足够大的
+`client_max_body_size`. 外层 HTTPS 返回 502 时, 应同时检查:
+
+```sh
+kubectl -n infra get service traefik -o wide
+kubectl -n infra get endpointslice -l kubernetes.io/service-name=traefik
+kubectl -n infra get gateway traefik-gateway -o yaml
+kubectl get httproute,tcproute -A -o wide
+```
+
+每条 Route 都应在 `.status.parents[].conditions` 中出现 `Accepted=True` 和
+`ResolvedRefs=True`. Traefik Chart 创建的 Gateway 通常名为
+`<release>-gateway`; 本部署为 `traefik-gateway`, 不能把 TCPRoute 的 parentRef
+写成不存在的 `traefik`. Gateway listener 显示 `attachedRoutes: 0` 而后端
+Service/Endpoint 正常时, 优先检查 parent 名称和 `sectionName`.
+
+外层 Nginx 与集群入口是两个独立故障边界. 公网 HTTPS 正常不代表公网
+GitLab SSH 正常; 外层主机还必须把 `gitlab.<domain>:22` 的 TCP 流量转发到
+Gateway 的 SSH listener. 应分别验证 HTTP、Gateway TCPRoute/Endpoint 和公网 22
+端口. 如果没有外层主机的授权访问, 不要用修改集群内 TCPRoute 来掩盖公网
+`connection refused`.
+
+外层和集群内 Traefik 也可能使用不同证书. 即使外层 Let's Encrypt 证书有效,
+提交在 GitOps 仓库中的 `secoder-tls` 仍可能过期, 影响节点 hosts shortcut 或
+直接访问 Traefik 的客户端. 部署和日常监控都要分别检查两层证书的 SAN 与
+`notAfter`; 若未部署 cert-manager, 必须建立人工续期和滚动验证流程.
+
+### 出站代理与冷启动
+
+本机或 SSH tunnel 代理只适合 bootstrap, 不应成为永久运行依赖. 如果将 containerd
+的 HTTP(S) proxy 指向集群内 Xray ClusterIP, 普通 Pod 或节点重启不会改变 Service IP,
+但删除并重建 Service 或整个集群可能重新分配 ClusterIP. 更重要的是, 这会形成
+containerd -> Cilium/Service -> Xray Pod -> containerd 的启动环:
+
+- 重建前预拉取 Cilium、Xray、pause 和控制器镜像;
+- 保留独立的 bootstrap egress 或镜像中转站;
+- 记录 Xray Service IP, 并在 Service 重建后同步更新 containerd drop-in;
+- 将 Pod、Service、节点、loopback、NFS 和集群 DNS 网段加入 `NO_PROXY`;
+- 修改代理后重启 containerd, 用一个此前未缓存的小镜像验证真实拉取.
+
+若采用镜像中转站, 应记录原始 digest 与中转后的 digest, 并继续在 GitOps 中固定
+不可变 digest. Git push 不应经过拉取镜像所使用的 HTTP proxy.
 
 ### GitLab
 
@@ -382,10 +532,17 @@ flux reconcile kustomization flux-system -n flux-system
 通过以下命令获取 root 用户的密码:
 
 ```sh
-kubectl get secrets -n devops \
-gitlab-gitlab-initial-root-password \
--o jsonpath="{.data.password}" | base64 -d
+kubectl get secret -n prod gitlab-gitlab-initial-root-password \
+  -o jsonpath="{.data.password}" | base64 -d
 ```
+
+命名空间和 Secret 名称以当前 Helm release 为准. 使用外部 CloudNativePG、Valkey
+和 Garage 时, 必须先验证数据库 migration、Gitaly、Sidekiq、Webservice、Registry、
+Runner 注册和 Toolbox, 不能用单个 Web 页面 200 代替完整 install 验收.
+
+课程当前不使用 GitLab incoming email. Helm values 应显式禁用 incoming email 和
+Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deployment/Pod;
+不要因为看到 outbound email 配置而启用收件链路.
 
 1. 抄写 root 用户的 email
 
@@ -394,7 +551,7 @@ gitlab-gitlab-initial-root-password \
 
    **做完这一步之后必须用 SECoder 的 root 登录一次 GitLab, 不然禁止 GitLab 密码登录后就无法再登录 GitLab 了**.
 
-1. 允许 PAT 过期
+1. 允许创建不过期的 PAT
 
    进入 `Admin > Settings > General > Account and limit`,
    - 禁用 `Access token expiration`
@@ -413,11 +570,12 @@ gitlab-gitlab-initial-root-password \
 
    进入 `Admin > Settings > General > Sign-in restrictions`
    - 禁用 `Allow password authentication for the web interface`
-     (必须, 否则 root 用户无法登录)
    - 禁用 `Allow password authentication for Git over HTTP(S)`
    - 启用 `Disable password authentication for users with an SSO identity`
 
-   同样注意保存设置
+   在执行这一步之前, 必须先把 GitLab root email 设置为 SECoder root email,
+   并用 SECoder root 完成一次真实 SSO 登录. 在独立浏览器会话验证 SSO 成功之前,
+   不得禁用密码登录, 否则可能锁死管理员入口. 同样注意保存设置.
 
 1. 设置仓库
 
@@ -445,7 +603,10 @@ gitlab-gitlab-initial-root-password \
 
 1. 创建 System hook
 
-   进入 `Admin > System hooks`, 配置 URL 为 `http://exporter:8000`. 不需要 Secret token. 这时测试可能看到 502 错误, 这是因为 exporter 还需要使用 Gitlab api token 主动查询.
+   进入 `Admin > System hooks`, 配置 URL 为 `http://exporter:8000`.
+   是否配置 Secret token 必须与 exporter 的 `GITLAB_WEBHOOK_SECRET` 一致.
+   先配置可用的 GitLab API token 并确认 exporter Ready, 再测试 hook;
+   不要把 502 当作正常状态.
 
 1. 创建 Access token
 
@@ -475,7 +636,24 @@ gitlab-gitlab-initial-root-password \
 
 ### SECoder 使用
 
-首先登录 root 用户, 密码是 `root`. 然后改掉密码.
+空数据库第一次启动时会创建 SECoder root 用户, 初始密码是 `root`.
+平台对外开放前必须立即登录并修改密码, 然后确认初始密码已经返回 401.
+如果保留或恢复了原来的 PVC, 则现有密码不会被 bootstrap 覆盖; 不要删除数据库来
+“重置”密码.
+
+集群重建后, 旧的用户 kubeconfig 即使尚未到期也不能继续使用, 因为 token 的
+签名密钥和绑定对象属于旧集群. 以 root 登录 SECoder 后, 从个人页面重新获取 RBAC
+token/kubeconfig, 并通过公网 Kubernetes API 验证:
+
+```sh
+chmod 600 u-root.kubeconfig
+kubectl --kubeconfig ./u-root.kubeconfig get namespace u-root
+kubectl --kubeconfig ./u-root.kubeconfig auth can-i '*' '*' --all-namespaces
+kubectl --kubeconfig ./u-root.kubeconfig get nodes
+```
+
+`u-root` 应带有正确的 SECoder tenant label, root 的绑定应指向预期的
+cluster-admin role. 普通用户还要验证只能访问自己的 namespace 和所在小组 namespace.
 
 助教配置后端时, 需准备学期内选课学生的学号与初始密码, 格式为纯文本每行一个
 (注意用 Unicode 编码):
@@ -490,6 +668,10 @@ gitlab-gitlab-initial-root-password \
 ### SonarQube
 
 同样, 登录 admin 用户, 密码 `admin`. 第一次登录后会要求改密码.
+
+如果 Community Edition 使用持久化内嵌 H2, 这只是单实例、非高可用方案.
+必须持久化 SonarQube 数据目录并记录备份/恢复边界; 生产规模增长后应迁移到
+受支持的外部数据库. Pod Ready 不能替代重启后的项目、分析历史和权限验证.
 
 打开 `https://sonar.@@SECODER_BASE_DOMAIN@@/admin/settings`, 设置 `sonar.core.serverBaseURL` 为 `https://sonar.@@SECODER_BASE_DOMAIN@@`.
 
@@ -510,6 +692,12 @@ gitlab-gitlab-initial-root-password \
 然后为 GitLab 配置登录:
 
 打开
-`https://sonar.@@SECODER_BASE_DOMAIN@@/admin/settings?category=authentication&tab=gitlab`, 参照指引 (一般来说是, 是 SonarQube 的线上文档) 配置 GitLab 作为鉴权提供者. GitLab 那里依次填写 `https://sonar.@@SECODER_BASE_DOMAIN@@/oauth2/callback/gitlab` (rediret url), `Confidential`, `api`. 然后在 SonarQube 那里配置 Application ID, GitLab URL 为 `https://gitlab.@@SECODER_BASE_DOMAIN@@`, 启用 `Synchronize user groups`. 填完这些后, 记得启用 `Allow users to sign up`, `Allowed groups` 留空.
+`https://sonar.@@SECODER_BASE_DOMAIN@@/admin/settings?category=authentication&tab=gitlab`,
+参照 SonarQube 线上文档配置 GitLab 作为鉴权提供者. GitLab 那里依次填写
+`https://sonar.@@SECODER_BASE_DOMAIN@@/oauth2/callback/gitlab` (redirect URL),
+`Confidential`, `api`. 然后在 SonarQube 那里配置 Application ID,
+GitLab URL 为 `https://gitlab.@@SECODER_BASE_DOMAIN@@`, 启用
+`Synchronize user groups`. 填完这些后, 记得启用 `Allow users to sign up`,
+`Allowed groups` 留空.
 
 接下来, 允许登录到 SonarQube 的用户从 GitLab 中导入项目 (这一步需要管理员提供一个 `api` 权限的 Personal Access Token`, 可以复用之前的), 届时使用 SECoder 的学生将独立导入他们的项目.
