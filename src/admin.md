@@ -551,6 +551,11 @@ Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deplo
 
    **做完这一步之后必须用 SECoder 的 root 登录一次 GitLab, 不然禁止 GitLab 密码登录后就无法再登录 GitLab 了**.
 
+   如果在 email 对齐前试登录并自动创建了重复用户, 恢复顺序必须是: 登录重复
+   用户并解除 JWT identity, 将 GitLab root 的主 email 写入 SECoder root, 再把
+   JWT identity 链接到 GitLab root, 最后删除重复用户. 完成后仍须用全新浏览器
+   会话重新证明 SECoder SSO 落到 GitLab 管理员 root, 才能禁用密码登录.
+
 1. 允许创建不过期的 PAT
 
    进入 `Admin > Settings > General > Account and limit`,
@@ -606,7 +611,9 @@ Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deplo
    进入 `Admin > System hooks`, 配置 URL 为 `http://exporter:8000`.
    是否配置 Secret token 必须与 exporter 的 `GITLAB_WEBHOOK_SECRET` 一致.
    先配置可用的 GitLab API token 并确认 exporter Ready, 再测试 hook;
-   不要把 502 当作正常状态.
+   不要把 502 当作正常状态. 重建后的 GitLab 内置测试可能继续引用不存在的示例
+   project/commit, 因而即使鉴权已修复也会返回 404; 最终验收必须创建真实项目并
+   push 一次, 确认 exporter 成功处理该 Push event.
 
 1. 创建 Access token
 
@@ -623,6 +630,10 @@ Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deplo
        - gitlab-token=<your-token>
    ```
 
+   如果 Secret 使用固定名称并通过环境变量注入, 更新 Secret 不会自动重启
+   reconciler/exporter. 应显式 rollout restart 这些消费者, 或把 Secret checksum
+   放入 Pod template annotation 以触发滚动更新. Grafana OAuth Secret 同理.
+
 1. 创建顶级分组
 
    以 root 身份创建 `g2026`, `u2026`, `pub` 顶级组.
@@ -632,7 +643,10 @@ Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deplo
 
    [Configure GitLab OAuth authentication | Grafana documentation](https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/gitlab/)
 
-   完成后, 记录下凭据, 填写到集群配置中.
+   GitLab application 的 callback URL 是
+   `https://grafana.@@SECODER_BASE_DOMAIN@@/login/gitlab`. 完成后, 记录下凭据,
+   填写到集群配置中; Secret 生效并重启 Grafana 后, 用全新浏览器会话验证一次
+   GitLab OAuth 登录.
 
 ### SECoder 使用
 
@@ -668,6 +682,8 @@ cluster-admin role. 普通用户还要验证只能访问自己的 namespace 和�
 ### SonarQube
 
 同样, 登录 admin 用户, 密码 `admin`. 第一次登录后会要求改密码.
+新密码不仅有长度要求, 还必须同时满足 SonarQube 当前版本显示的大小写字母、数字、
+特殊字符等复杂度规则; 纯十六进制随机串可能被拒绝.
 
 如果 Community Edition 使用持久化内嵌 H2, 这只是单实例、非高可用方案.
 必须持久化 SonarQube 数据目录并记录备份/恢复边界; 生产规模增长后应迁移到
@@ -683,8 +699,8 @@ cluster-admin role. 普通用户还要验证只能访问自己的 namespace 和�
 
 修改 Default Permission Template, 将它改成如下的设置:
 
-| Group | Browse | See Source Code | Administer Issues | Administer Security Hotspots | Administer | Execute Analysis |
-| --- | --- | --- | --- | --- | --- | --- |
+| Group | Browse | See Source Code | Administer Issues | Administer Security Hotspots | Administer Architecture | Administer | Execute Analysis |
+| --- | --- | --- | --- | --- | --- | --- | --- |
 | sonar-administrators | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
 | sonar-users | Yes | No | No | No | No | No | No |
 | Creators | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
@@ -698,6 +714,13 @@ cluster-admin role. 普通用户还要验证只能访问自己的 namespace 和�
 `Confidential`, `api`. 然后在 SonarQube 那里配置 Application ID,
 GitLab URL 为 `https://gitlab.@@SECODER_BASE_DOMAIN@@`, 启用
 `Synchronize user groups`. 填完这些后, 记得启用 `Allow users to sign up`,
-`Allowed groups` 留空.
+`Allowed groups` 留空. 这表示任何能够通过该 GitLab 鉴权的用户都可进入
+SonarQube, 当前版本会显示高风险确认对话框; 只有明确接受该暴露边界时才确认,
+并在保存后执行一次全新会话 GitLab OAuth 登录.
 
-接下来, 允许登录到 SonarQube 的用户从 GitLab 中导入项目 (这一步需要管理员提供一个 `api` 权限的 Personal Access Token`, 可以复用之前的), 届时使用 SECoder 的学生将独立导入他们的项目.
+接下来打开
+`https://sonar.@@SECODER_BASE_DOMAIN@@/admin/settings?category=almintegration&alm=gitlab`,
+允许登录到 SonarQube 的用户从 GitLab 中导入项目. GitLab API URL 填写
+`https://gitlab.@@SECODER_BASE_DOMAIN@@/api/v4`, token 使用具有 `api` 权限的
+Personal Access Token (可以复用之前的). 保存后必须看到 `Configuration valid`,
+届时使用 SECoder 的学生将独立导入他们的项目.

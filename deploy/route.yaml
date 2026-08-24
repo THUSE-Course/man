@@ -9,7 +9,7 @@ spec:
       name: traefik-gateway
       namespace: infra
   hostnames:
-    - u-root-man.t.secoder.net
+    - man.t.secoder.net
   rules:
     - backendRefs:
         - name: man
