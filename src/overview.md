@@ -24,7 +24,7 @@
 GitLab 是一个基于 Web 的 DevOps 生命周期工具, 提供 Git 代码仓库管理,
 持续集成/持续部署 (CI/CD), 代码审查等功能.
 
-点击 **GitLab 代码仓库和 CI/CD** 按钮将跳转到 GitLab 服务页面.
+点击 **GitLab** 按钮将跳转到 GitLab 服务页面.
 
 <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
   <img src="assets/overview-desktop-02.png" alt="GitLab 服务按钮 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
@@ -45,7 +45,7 @@ GitLab 是一个基于 Web 的 DevOps 生命周期工具, 提供 Git 代码仓�
 SonarQube 是一个开源的代码质量和安全分析平台, 能够检测代码中的 bug,
 漏洞和代码异味.
 
-点击 **SonarQube 代码质量和安全分析** 按钮将跳转到 SonarQube 服务页面.
+点击 **SonarQube** 按钮将跳转到 SonarQube 服务页面.
 
 <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
   <img src="assets/overview-desktop-03.png" alt="SonarQube 服务按钮 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
@@ -65,7 +65,7 @@ SonarQube 是一个开源的代码质量和安全分析平台, 能够检测代�
 
 Grafana 是一个开源的分析和可视化平台, 用于监控和分析系统指标.
 
-点击 **Grafana 监控 集群指标告警** 按钮将跳转到 Grafana 服务页面.
+点击 **Grafana 监控** 按钮将跳转到 Grafana 服务页面.
 
 <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
   <img src="assets/overview-desktop-04.png" alt="Grafana 服务按钮 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
@@ -81,21 +81,22 @@ Grafana 是一个开源的分析和可视化平台, 用于监控和分析系统�
 
 ### Kubernetes 仪表板 容器编排监控
 
-Kubernetes Dashboard 是 Kubernetes 集群的 Web 界面, 用于管理和监控容器化应用.
+SECoder 当前使用 Headlamp 提供 Kubernetes Web 界面, 前端按钮显示为
+**Kubernetes 仪表板**. 普通用户主要在自己的命名空间中查看和管理容器化应用.
 
-点击 **Kubernetes 仪表板 容器编排监控** 按钮将跳转到 Kubernetes 服务页面.
+点击 **Kubernetes 仪表板** 按钮将跳转到 Headlamp 页面.
 
 <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
   <img src="assets/overview-desktop-05.png" alt="Kubernetes 服务按钮 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
   <img src="assets/overview-mobile-05.png" alt="Kubernetes 服务按钮 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
 </div>
 
-通过 Kubernetes Dashboard, 你可以:
+通过该界面, 你可以:
 
-- 查看集群状态和节点信息
-- 管理部署, 服务和 ingress
+- 查看允许访问的集群状态和节点信息
+- 管理个人命名空间中的 Deployment, StatefulSet, Service 和 HTTPRoute 等资源
 - 查看容器日志
-- 监控资源使用情况
+- 查看个人命名空间的资源配额与使用情况
 
 ## 用户信息
 
@@ -110,14 +111,16 @@ Kubernetes Dashboard 是 Kubernetes 集群的 Web 界面, 用于管理和监控�
   <img src="assets/overview-mobile-06.png" alt="用户信息区 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
 </div>
 
-这些信息与 GitLab 等服务同步, 确保各平台间数据的一致性. 如需修改, 请联系助教或使用平台提供的账号管理功能.
+这些信息来自 SECoder 账户. 你可以在 **个人资料** 页面修改姓名和邮箱;
+修改后需要重新登录 GitLab, 才会在下一次 SSO 时向 GitLab 提供最新信息.
 
 ## 导航栏
 
-页面顶部的导航栏提供了以下功能:
+桌面端使用左侧边栏在 **概览**、**用户**、**小组**、**邀请** 和
+**个人资料** 页面之间切换; 移动端先点击顶部菜单按钮展开侧边栏.
+页面顶部还提供:
 
-- **菜单按钮**: 展开侧边栏导航
-- **概览**: 当前页面标题
-- **Change Language**: 切换界面语言 (中英文)
+- **当前页面标题**
+- **语言按钮**: 切换英文、简体中文或繁体中文
 - **主题切换**: 切换深色/亮色模式
 - **退出登录**: 退出当前账户

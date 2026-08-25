@@ -5,7 +5,8 @@
 - [快速入门](./intro.md) - 注册平台账号并激活 GitLab
 - [用户登录](./login.md) - 登录平台与界面设置
 - [主界面](./overview.md) - 了解平台功能和服务入口
-- [个人资料](./profile.md) - 管理个人信息与 API 令牌
+- [用户目录](./users.md) - 查看平台用户与组队状态
+- [个人资料](./profile.md) - 管理个人信息与 Kubernetes 凭据
 - [小组管理](./create-group.md) - 创建小组, 邀请成员与团队协作
 - [部署应用](./deploy.md) - 在 SECoder 平台上部署应用
 

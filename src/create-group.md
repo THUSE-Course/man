@@ -5,7 +5,8 @@
 
 ## 创建小组
 
-创建小组后, 你将成为该小组的组长, 负责管理小组成员和权限.
+每个用户同时只能属于一个小组. 仅当你尚未加入小组时才能创建小组;
+创建后你将成为组长, 负责小组信息和邀请.
 
 ### 进入小组管理页面
 
@@ -18,7 +19,7 @@
 
 ### 开始创建小组
 
-点击页面右上角的 **创建小组** 按钮开始创建流程.
+在 **我的小组** 标签页点击 **创建小组** 按钮开始创建流程.
 
 ### 填写小组信息
 
@@ -39,20 +40,22 @@
 
 **标识符要求**:
 
-- 必须符合 [RFC 1035](https://tools.ietf.org/html/rfc1035) 标准
-- 只能包含小写字母, 数字和连字符(-)
-- 必须以字母或数字开头和结尾
-- 建议使用简短, 易记的标识符
+- 建议直接使用符合 RFC 1035 的名称: 小写字母、数字和连字符 (`-`)
+- 建议以字母或数字开头和结尾, 最长 63 个字符
+- 服务端会把大写字母转为小写, 把其他字符转为连字符, 去掉首尾连字符并截断到
+  63 个字符; 创建完成后应以页面实际显示的标识符为准
+- 标识符创建后不能修改, 并且不能与现有小组重复
 
 <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
   <img src="assets/create-group-desktop-03.png" alt="填写小组标识符 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
   <img src="assets/create-group-mobile-03.png" alt="填写小组标识符 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
 </div>
 
-**示例**:
+**建议示例**:
 
-- 有效标识符: `group1`, `team-alpha`, `cs101-2024`
-- 无效标识符: `Group-1`(含大写), `-team`(以连字符开头), `team_1`(含下划线)
+- 可直接使用: `group1`, `team-alpha`, `cs101-2024`
+- 会被规范化: `Group-1` 变为 `group-1`, `-team` 变为 `team`,
+  `team_1` 变为 `team-1`
 
 ### 完成创建
 
@@ -100,6 +103,16 @@
 
 ---
 
+## 删除小组
+
+<!-- TODO(screenshots): 添加删除小组确认框和组长“小组邀请”标签页截图. -->
+
+只有组长能删除小组. 在 **我的小组** 标签页点击 **删除小组** 并确认后,
+系统会删除小组, 清除该小组的待处理邀请, 并让所有成员回到未分组状态.
+这个操作不能从学生界面撤销; 删除前请先确认小组标识符和成员列表.
+
+---
+
 ## 邀请成员
 
 只有小组组长才能邀请新成员加入小组.
@@ -121,6 +134,9 @@
 
 点击 **发送邀请** 按钮完成邀请发送.
 
+被邀请人必须已经注册且当前未加入其他小组. 每位用户最多可以同时保留 5 个待处理邀请.
+组长可以在仅对组长显示的 **小组邀请** 标签页中查看本组尚未处理的邀请.
+
 <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
   <img src="assets/invite-user-desktop-02.png" alt="发送邀请 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
   <img src="assets/invite-user-mobile-02.png" alt="发送邀请 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
@@ -130,7 +146,7 @@
 
 ## 接受邀请
 
-收到小组邀请后, 你可以选择接受或拒绝.
+收到小组邀请后, 你可以选择接受或拒绝. 已经加入小组的用户不能再接受其他邀请.
 
 ### 查看邀请
 

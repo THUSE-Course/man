@@ -69,7 +69,9 @@ SECoder 平台集成了 GitLab 代码仓库系统, 你可以通过 SECoder 账�
 3. **通过 SECoder 授权登录**
 
    点击 **secoder** 按钮, 会跳转到 SECoder 授权页面.
-   页面会显示将要同步给 GitLab 的信息 (账号, 邮箱, 姓名), 点击 **继续前往 GitLab** 完成授权.
+   页面会显示将要提供给 GitLab 的信息 (账号, 邮箱, 姓名), 点击
+   **继续前往 GitLab** 完成授权. 如果勾选 **4 周内不再提示**,
+   当前浏览器会在 4 周内自动批准后续 GitLab 登录; 这个选择不延长 SECoder 登录令牌的有效期.
 
    <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
      <img src="assets/gitlab-jwt-desktop-03.png" alt="SECoder 授权页面 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
@@ -87,8 +89,8 @@ SECoder 平台集成了 GitLab 代码仓库系统, 你可以通过 SECoder 账�
 
 ### 同步 GitLab 子组
 
-登录成功后, SECoder 会自动将你的邮箱, 姓名同步给 GitLab.
-如果你在 SECoder 中修改了这些信息, 需要重新登录 GitLab 以更新.
+每次通过 SECoder 登录 GitLab 时, GitLab 会收到当前账号, 邮箱和姓名.
+如果你在 SECoder 中修改了这些信息, 需要重新执行一次 GitLab 登录以更新.
 
 为了在 GitLab 中创建属于你的群组, 你需要手动触发同步:
 

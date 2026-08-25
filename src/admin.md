@@ -28,8 +28,9 @@ SECoder 既可以指整个包含 Kubernetes 集群在内的平台,
 - Route 未附着、外层 502、GitLab SSH 不通或两层 TLS 不一致:
   见“[反代](#反代)”.
 - registry 拉取停滞或冷启动超时: 见“[镜像拉取与冷启动](#镜像拉取与冷启动)”.
-- GitLab SSO、System Hook、固定 Secret、CI ApplySet 或邮件验收失败:
-  见“[GitLab](#gitlab)”.
+- GitLab SSO、System Hook、固定 Secret 或邮件验收失败: 见“[GitLab](#gitlab)”.
+- CI ApplySet 部分落地或私有镜像拉取失败:
+  见“[CI 发布与 ApplySet 恢复](#ci-发布与-applyset-恢复)”.
 - SECoder root/RBAC/kubeconfig 失效: 见“[SECoder 使用](#secoder-使用)”.
 - SonarQube 初始化、权限或 OAuth 失败: 见“[SonarQube](#sonarqube)”.
 
@@ -653,31 +654,16 @@ Runner 注册和 Toolbox, 不能用单个 Web 页面 200 代替完整 install �
 Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deployment/Pod;
 不要因为看到 outbound email 配置而启用收件链路.
 
-#### 出站邮件验收与恢复
+#### 管理员初始化
 
-出站 SMTP 不能只靠 HelmRelease Ready 验收. 应按 source、live Secret、Rails runtime、
-SMTP provider 和最终邮箱五层核对, 全程只比较选定的非敏感字段与凭据 SHA-256,
-不得打印密码:
+GitLab 19 的设置页会把折叠 accordion 中的控件保留在页面树中. 每次修改前先展开
+对应 section, 保存后 hard reload 并逐项读回; 自动化工具报告点击成功并不能证明
+设置值已经改变.
 
-```sh
-kubectl -n prod get helmrelease/gitlab
-kubectl -n prod get deployments,pods -o name | grep -i mailroom || true
-kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
-  gitlab-rails runner 'require "json"; require "digest"; s=ActionMailer::Base.smtp_settings; puts({delivery_method: ActionMailer::Base.delivery_method, address: s[:address], port: s[:port], authentication: s[:authentication], starttls_auto: s[:enable_starttls_auto], verify_mode: s[:openssl_verify_mode], from: Gitlab.config.gitlab.email_from, reply_to: Gitlab.config.gitlab.email_reply_to, password_sha256: Digest::SHA256.hexdigest(s[:password].to_s)}.to_json)'
-kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
-  gitlab-rails runner 'Notify.test_email("operator@example.edu", "GitLab SMTP test", "delivery validation").deliver_now'
-```
+1. 修改 root 初始密码
 
-恢复时先定位不一致层级:
-
-1. source 与 live Secret 哈希不同: 修正权威 GitOps source 并等待 Secret reconciliation;
-2. live Secret 与 Rails runtime 哈希不同: 等待 Helm reconciliation, 并滚动重启实际读取
-   该 Secret 的 GitLab workload;
-3. runtime 一致但同步发送失败: 根据错误检查 DNS、端口、STARTTLS、证书校验、发件人
-   allowlist 和 provider credential, 不要改为明文或关闭证书校验来掩盖问题;
-4. SMTP transaction accepted 但未收到: 检查退信、垃圾邮件和 provider delivery log;
-5. 最终必须由收件人确认主题、发件人和正文. 同时再次证明 incoming email 为 false,
-   且集群中没有 Mailroom workload.
+   使用上面取得的初始密码登录 GitLab, 立即设置符合当前密码策略的新密码. 在完成
+   SECoder SSO 锁定验收前保留这一管理员密码入口, 但不得继续使用初始密码.
 
 1. 抄写 root 用户的 email
 
@@ -692,9 +678,10 @@ kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
    会话重新证明 SECoder SSO 落到 GitLab 管理员 root, 才能禁用密码登录.
 
    如果真实 SSO redirect 返回 JWT signature verification failed, 立即停止密码登录
-   禁用操作. 分别对 SECoder 当前签名材料和 GitLab verifier 配置做不泄露内容的
-   fingerprint/hash 比较, 从权威 GitOps source 修正不一致的一侧, 等待配置生效并
-   重启读取固定 Secret/ConfigMap 的 workload. 之后使用全新浏览器会话重新执行完整
+   禁用操作. 从 SECoder 实际签名私钥派生公钥, 将其 fingerprint 与 GitLab verifier
+   当前读取的公钥 fingerprint 比较; 不要直接比较私钥和公钥文件的 SHA-256. 若 GitOps
+   source 已正确而 live Secret/ConfigMap 仍旧, 应先恢复 reconciliation, 而不是改写
+   正确 source. 修正后重启实际读取该配置的 workload, 再用全新浏览器会话执行完整
    redirect, 必须落到预期管理员账号. 仅看到 provider 按钮或 email 相同都不算通过.
 
 1. 允许创建不过期的 PAT
@@ -704,10 +691,6 @@ kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
    - 禁用 `Allow new users to create top-level groups`
 
    点击 `Save changes` 保存选择.
-
-   GitLab 19 的设置页会把折叠 accordion 中的控件保留在页面树中. 保存前先展开对应
-   section, 保存后 hard reload 并逐项读回; 自动化工具报告点击成功并不能证明设置值
-   已经改变.
 
 1. 禁止注册
 
@@ -751,15 +734,6 @@ kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
 
    同样注意保存设置
 
-1. 创建 System hook
-
-   进入 `Admin > System hooks`, 配置 URL 为 `http://exporter:8000`.
-   是否配置 Secret token 必须与 exporter 的 `GITLAB_WEBHOOK_SECRET` 一致.
-   先配置可用的 GitLab API token 并确认 exporter Ready, 再测试 hook;
-   不要把 502 当作正常状态. 重建后的 GitLab 内置测试可能继续引用不存在的示例
-   project/commit, 因而即使鉴权已修复也会返回 404; 最终验收必须创建真实项目并
-   push 一次, 确认 exporter 成功处理该 Push event.
-
 1. 创建 Access token
 
    进入 `User settings > Personal access tokens`
@@ -779,6 +753,15 @@ kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
    reconciler/exporter. 应显式 rollout restart 这些消费者, 或把 Secret checksum
    放入 Pod template annotation 以触发滚动更新. Grafana OAuth Secret 同理.
 
+1. 创建 System hook
+
+   确认新的 API token 已被消费者读取且 exporter Ready 后, 进入
+   `Admin > System hooks`, 配置 URL 为 `http://exporter:8000`.
+   是否配置 Secret token 必须与 exporter 的 `GITLAB_WEBHOOK_SECRET` 一致.
+   不要把 502 当作正常状态. 重建后的 GitLab 内置测试可能继续引用不存在的示例
+   project/commit, 因而即使鉴权已修复也会返回 404; 最终验收必须创建真实项目并
+   push 一次, 确认 exporter 成功处理该 Push event.
+
 1. 创建顶级分组
 
    以 root 身份创建 `g2026`, `u2026`, `pub` 顶级组.
@@ -793,7 +776,43 @@ kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
    填写到集群配置中; Secret 生效并重启 Grafana 后, 用全新浏览器会话验证一次
    GitLab OAuth 登录.
 
-#### CI 发布与 ApplySet 恢复
+#### 出站邮件验收与恢复
+
+出站 SMTP 应在 GitLab 管理员初始化和集成配置完成后验收, 不能只以 HelmRelease
+Ready 作为结论. 按以下顺序核对, 全程不得打印密码:
+
+1. 比较 GitOps source 中的 SMTP 非敏感字段与 live Helm values;
+2. 用 secret-safe helper 计算 source generator 中密码的 SHA-256, 再与 live Secret
+   和 Rails runtime 的密码 SHA-256 比较;
+3. 从 Rails runtime 读回 delivery method、服务器、端口、TLS、发件人和 reply-to;
+4. 同步发送一封测试邮件, 证明 SMTP provider 接受 transaction;
+5. 由收件人确认收到预期发件人、主题和正文;
+6. 再次确认 incoming email 仍为 false, 且没有 Mailroom Deployment/Pod.
+
+```sh
+kubectl -n prod get helmrelease/gitlab
+kubectl -n prod get deployment,pod -o name
+kubectl -n prod get secret gitlab-smtp \
+  -o jsonpath='{.data.password}' | base64 -d | sha256sum
+kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
+  gitlab-rails runner 'require "json"; require "digest"; s=ActionMailer::Base.smtp_settings; puts({delivery_method: ActionMailer::Base.delivery_method, address: s[:address], port: s[:port], authentication: s[:authentication], starttls_auto: s[:enable_starttls_auto], verify_mode: s[:openssl_verify_mode], from: Gitlab.config.gitlab.email_from, reply_to: Gitlab.config.gitlab.email_reply_to, password_sha256: Digest::SHA256.hexdigest(s[:password].to_s)}.to_json)'
+kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
+  gitlab-rails runner 'Notify.test_email("operator@example.edu", "GitLab SMTP test", "delivery validation").deliver_now'
+```
+
+失败时按不一致边界恢复:
+
+- source 与 live Secret 不一致: 先确认权威 source 正确, 再恢复 Flux/Helm
+  reconciliation; 不要把错误的 live 值回填到 source.
+- live Secret 与 Rails runtime 不一致: 检查 GitLab Chart 生成的配置和 Secret 引用,
+  等 Helm reconciliation 完成后, 只滚动重启实际消费 SMTP 配置的 workload.
+- runtime 一致但同步发送失败: 根据原始错误检查 DNS、端口、STARTTLS、证书校验、
+  发件人 allowlist 和 provider credential; 不要关闭 TLS 校验来掩盖问题.
+- transaction accepted 但未收到: 检查退信、垃圾邮件和 provider delivery log,
+  直到邮箱收件读回完成.
+- 任何恢复都不得顺带启用 incoming email、复制 IMAP credential 或部署 Mailroom.
+
+### CI 发布与 ApplySet 恢复
 
 平台服务使用管理员 namespace 发布; 普通用户 namespace 的 HTTPRoute hostname
 必须以 namespace 开头. admission 因 hostname/namespace 不匹配而拒绝 Route 时,

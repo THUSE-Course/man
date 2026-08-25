@@ -12,6 +12,10 @@ CI/CD 自动部署.
 
 示例: 学号是 `2026000000`, 则 `NAMESPACE=u-2026000000`.
 
+这里的 `TOKEN` 是 Kubernetes API 令牌. 如果在个人资料页轮换令牌,
+必须同步更新项目中的 `TOKEN` 变量, 否则后续部署会鉴权失败. 应把该变量设为 masked;
+不要写进仓库或输出到 job 日志.
+
 ## 先理解 `kustomization.yaml`
 
 `kustomization.yaml` 是部署入口文件:
@@ -29,12 +33,13 @@ patches:
   - path: route.yaml
   - path: frontend.yaml
   - path: backend.yaml
+  - path: pvc.yaml
 ```
 
 这表示:
 
 1. 先读取 `deploy/basic/` 的默认资源
-2. 再应用 3 个补丁
+2. 再应用 Route、前端、后端和持久卷 4 个补丁
 
 ## 最小补丁示例
 
@@ -82,6 +87,17 @@ spec:
           image: nginx:1.29.5-alpine3.23
 ```
 
+### `pvc.yaml`: 挂载持久存储
+
+当前最小模板还用 `pvc.yaml` 为后端 StatefulSet 增加 `volumeMounts` 和
+`volumeClaimTemplates`. SECoder 用户命名空间只允许使用 `nfs-tmp` StorageClass;
+模板示例申请 `1Gi` 的 `ReadWriteOnce` 存储并挂载到 `/data`.
+
+请直接从当前
+[secoder-tmpl/examples/minimal](https://github.com/THUSE-Course/secoder-tmpl/tree/master/examples/minimal)
+复制完整的 `pvc.yaml`, 再按应用实际的数据目录和容量修改. 不要只在
+`kustomization.yaml` 中加入文件名而漏掉补丁文件.
+
 ## 在 GitLab CI/CD 中部署
 
 SECoder 模板的 CI 文件位于:
@@ -126,6 +142,11 @@ deploy:
   extends: .kustomize
 ```
 
+该模板使用 ApplySet 和 `--prune`: 同一项目后续部署时, 从 Kustomize 输出中移除的
+旧资源会被删除. 如果某个资源校验失败, 之前的资源可能已经部分落地;
+应先查看 job trace 和当前 namespace 中属于该 ApplySet 的对象, 再修正配置并重试,
+不要直接批量删除 namespace 中的全部资源.
+
 ## 使用 BuildKit 缓存
 
 如果项目用 BuildKit 构建镜像, 可以把缓存导出到同一个 GitLab Container
@@ -160,7 +181,7 @@ buildctl-daemonless.sh build \
 在提交前, 建议先在本地预览:
 
 ```bash
-kubectl kustomize deploy/minimal
+kubectl kustomize path/to/your/kustomization-directory
 ```
 
 这个命令只会输出最终 YAML, 不会实际修改集群.
