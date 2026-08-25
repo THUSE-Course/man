@@ -19,6 +19,20 @@ SECoder 既可以指整个包含 Kubernetes 集群在内的平台,
 - 推荐至少两台虚拟机 (控制面和工作节点分离). 单节点部署也可运行,
   但控制面、入口和所有有状态依赖会同时失效, 不属于高可用部署.
 
+### 部署故障索引
+
+- 节点 `NotReady`、CoreDNS `Pending`: 见“[Kubernetes 集群](#kubernetes-集群)”.
+- Flux CRD/CR bootstrap、revision 未推进、Helm retries exhausted、首次 install
+  误入 upgrade、Gateway API 大对象、CloudNativePG 或 Garage 初始化失败:
+  见“[GitOps 依赖顺序与发布验证](#gitops-依赖顺序与发布验证)”.
+- Route 未附着、外层 502、GitLab SSH 不通或两层 TLS 不一致:
+  见“[反代](#反代)”.
+- registry 拉取停滞或冷启动超时: 见“[镜像拉取与冷启动](#镜像拉取与冷启动)”.
+- GitLab SSO、System Hook、固定 Secret、CI ApplySet 或邮件验收失败:
+  见“[GitLab](#gitlab)”.
+- SECoder root/RBAC/kubeconfig 失效: 见“[SECoder 使用](#secoder-使用)”.
+- SonarQube 初始化、权限或 OAuth 失败: 见“[SonarQube](#sonarqube)”.
+
 ### Kubernetes 集群
 
 新版本 SECoder 的开发在 2026 年初完成, 使用 Debian 13 和 Kubernetes 1.36.
@@ -180,6 +194,25 @@ helm install cilium cilium/cilium \
 kubectl get pods -A
 kubectl get nodes -o wide
 ```
+
+如果节点长期停留在 `NotReady`, 不要直接重复执行 `kubeadm init` 或重新安装所有组件.
+先按下面的顺序缩小故障边界:
+
+```sh
+kubectl -n kube-system get pods -o wide
+kubectl -n kube-system describe daemonset/cilium
+kubectl -n kube-system logs daemonset/cilium --all-containers --tail=200
+journalctl -u kubelet -u containerd --since=-15min --no-pager
+crictl info
+```
+
+- Cilium Pod 尚未创建时, 检查 Helm release、节点 taint 和镜像拉取事件.
+- Cilium 已运行而 CoreDNS 仍为 `Pending` 时, 检查 Pod CIDR、Service CIDR、
+  `k8sServiceHost`、网卡名以及是否确实跳过了 kube-proxy.
+- sandbox image 不一致时, 以 `kubeadm config images list` 为准修正 containerd,
+  重启 containerd 和 kubelet 后重新检查, 不要重新初始化控制面.
+- 日志显示 CRI 或 CNI 错误时, 先证明运行时和 Cilium 的实际故障已经消失,
+  再等待节点条件恢复. 一个成功的 Helm 命令不等于数据面已经可用.
 
 最后, 在每个工作节点上执行控制面初始化时输出的加入命令:
 
@@ -369,6 +402,10 @@ cat /etc/exports
 
 ### GitOps 依赖顺序与发布验证
 
+下面列出的恢复操作都应先确认故障对象、当前 Git revision 和实际工作负载状态.
+不要因为上层 Kustomization 显示失败就删除整个 namespace; 很多情况下底层 Pod
+已经恢复, 只是控制器仍保留着之前耗尽的失败状态.
+
 完整部署不是把所有 Kustomization 同时创建即可. 推荐的依赖顺序是:
 
 1. 安装 Gateway API CRD 和 Flux 控制器, 等待 CRD Established;
@@ -384,6 +421,16 @@ Kyverno 必须先于 SECoder 的生成策略. CloudNativePG 若启用
 `shared_preload_libraries`, 必须先确认镜像中存在对应扩展, 否则 PostgreSQL 会在
 启动阶段反复失败. Garage 第一次启动时, 需要先完成 layout 分配和应用,
 再创建 bucket、key 和依赖它们的 Secret; 只等待 Pod Ready 不代表 layout 已可用.
+
+如果 Garage Pod 为 `Running` 但 readiness 为 false, init Job 又一直等待
+StatefulSet Ready, 这是首次 layout 的依赖环, 不是简单的慢启动. 恢复步骤是:
+
+1. 让 init Job 只等待 Pod 进入 `Running` 且 Garage CLI 能返回 node ID;
+2. 幂等地分配并 apply layout, 然后再等待 Pod Ready;
+3. 继续创建 bucket、key 和派生 Secret;
+4. 修改 Job 命令时使用新的版本化 Job 名称, 因为已有 Job 的 Pod template 不可变;
+5. 从 live layout、派生 Secret 和 Job 完成日志三处验收, 最后再复位 Garage
+   HelmRelease 和拥有它的 Kustomization 的旧失败状态.
 
 大型 Chart 第一次冷启动会拉取数百 MB 到 1 GB 以上的镜像. GitLab 和 SonarQube
 的 HelmRelease 应为 install/upgrade 设置足够的超时 (例如 `60m`) 和明确 remediation:
@@ -405,6 +452,40 @@ spec:
 数据库和其他独立资源的所有权, 然后只删除并让 Flux 重建对应 HelmRelease,
 以获得真正的 clean install. 不要为此删除 namespace、数据库或独立 PVC.
 
+普通的 reconcile 请求不会清除已经耗尽的 Helm remediation 次数. 当镜像拉取完成、
+Pod 和依赖已经健康, 但 HelmRelease 仍报告 retries exhausted 时, 使用同一个新 token
+同时请求 reconcile 和 reset:
+
+```sh
+token="$(date -Iseconds)"
+namespace=NAMESPACE
+release=RELEASE
+kubectl -n "$namespace" annotate "helmrelease/$release" \
+  reconcile.fluxcd.io/requestedAt="$token" \
+  reconcile.fluxcd.io/resetAt="$token" --overwrite
+kubectl -n "$namespace" get "helmrelease/$release" \
+  -o jsonpath='{.status.lastHandledResetAt}{"\n"}'
+kubectl -n "$namespace" wait --for=condition=Ready \
+  "helmrelease/$release" --timeout=30m
+```
+
+只有 `.status.lastHandledResetAt` 已处理新的 token, 且 live workload 同时健康,
+才能认为恢复成功. 随后还要显式 reconcile 并等待上层 Kustomization Ready:
+
+```sh
+stage=KUSTOMIZATION_NAME
+kubectl -n flux-system annotate "kustomization/$stage" \
+  reconcile.fluxcd.io/requestedAt="$token" --overwrite
+kubectl -n flux-system wait --for=condition=Ready \
+  "kustomization/$stage" --timeout=30m
+```
+
+如果首次 install 在 pre-install hook 中超时, 后续却持续执行 upgrade 并被
+“没有上一版本”一类保护拒绝, 应先等待当前 Helm action 停止, 列出 Helm history、
+Chart 管理的资源和独立 PVC/数据库. 确认有状态依赖不归该 HelmRelease 删除后,
+只删除 `helmrelease/<release>` 并等待 finalizer 完成清理, 再让 Flux 从 Git
+重新创建它. 这是恢复首次 install, 不是删除应用数据的手段.
+
 发布前不仅要检查 HelmRelease values, 还要渲染实际 Chart 资源并断言关键字段.
 至少执行:
 
@@ -415,6 +496,28 @@ helm template <release> <repo>/<chart> --version <version> \
 kubeconform -strict -summary -ignore-missing-schemas /tmp/chart.yaml
 kubectl apply --server-side --dry-run=server -f /tmp/rendered.yaml
 ```
+
+本地 render 与通用 JSON schema 不能覆盖 admission webhook 的全部规则. 例如
+CloudNativePG 会拒绝把 operator 管理的 fixed parameter 放在普通
+`spec.postgresql.parameters` 中. 遇到这类错误时, 保留 API Server 返回的完整错误,
+查看 live CRD 提供的字段并改用专用字段:
+
+```sh
+kubectl explain cluster.spec.postgresql --api-version=postgresql.cnpg.io/v1
+kubectl explain cluster.spec.postgresql.shared_preload_libraries \
+  --api-version=postgresql.cnpg.io/v1
+kubectl apply --server-side --dry-run=server -f /tmp/rendered.yaml
+```
+
+只有 live webhook 接受 dry-run 后才能提交并触发有状态资源创建.
+
+Gateway API 的 experimental CRD bundle 可能超过 Helm release Secret 的 1 MiB
+限制. 如果 `traefik-crds` 一类 release 因 `Secret too large` 失败, 不要删减 CRD
+schema 或反复 reset release. 应从 Gateway API 官方 release 获取与 Chart annotation
+一致的 bundle, 校验版本、channel、SHA-256 和所需 `TCPRoute` API, 将 bundle 作为
+独立清单逐对象 server-side apply, 等待所有 CRD `Established`, 再移除失败的
+CRD HelmRelease 并恢复依赖它的 Kustomization. Chart 注释不是版本的权威证据,
+应以清单 annotation 和官方发布物比对为准.
 
 Chart 大版本会移动 values 路径而不一定报错. 例如 Traefik Chart 41 的
 Kubernetes Service 原生字段位于 `service.spec`; external IP 应写成:
@@ -427,62 +530,67 @@ service:
 ```
 
 因此还应解析 `/tmp/chart.yaml`, 确认最终 `Service.spec.externalIPs` 等关键字段
-确实存在, 而不是仅确认 HelmRelease 保存了输入值.
+确实存在, 而不是仅确认 HelmRelease 保存了输入值. 如果 HelmRelease Ready 但 live
+Service 缺少该字段, 应修正权威 values、重新 render 和 server-side dry-run, 再通过
+Flux 发布并读回 Service; 不要只 patch live Service, 否则下次 reconcile 会覆盖修复.
 
-下面的 `flux bootstrap git` 是通用 Git 仓库的模板 (需要 SSH 端口), 适合自建 Git
-服务或者不希望依赖代码托管平台 API 的场景. 如果实际部署使用 GitHub,
-GitLab, Gitea 等平台, 应当参考 FluxCD 对应的平台模板, 例如
-`flux bootstrap github`, `flux bootstrap gitlab` 或
-`flux bootstrap gitea`, 并按照平台要求准备 token, owner,
-repository, deploy key 等参数. 这些模板的认证方式不同, 但目标一致:
-在 Git 仓库中提交 FluxCD 组件和同步配置, 并让集群持续同步指定目录.
+首次创建新的 GitOps 仓库时, 可以使用与托管平台匹配的
+`flux bootstrap gitlab`、`flux bootstrap github` 或 `flux bootstrap gitea`
+生成组件和 sync 清单. 生成后先审查并签名提交. 已经准备好的 SECoder GitOps
+仓库则不应再次运行会写仓库的 bootstrap 命令;
+新集群只需要安装已提交的组件, 并使用只读 deploy key 创建 source Secret.
+管理员的 Git 写凭据与集群内只读凭据必须分开保存和轮换.
 
-使用通用 Git 模板时, 管理员需要先准备一个保存集群配置的仓库, 例如
-`secoder-cluster`, 并准备一把对该仓库有读写权限的 SSH 私钥. 对应公钥
-需要提前加入 Git 服务端的仓库权限或者部署密钥中.
+如果 Flux controller 的出站配置依赖同一个 GitOps 仓库中的网络前置工作负载,
+直接先安装 Flux 会形成“Flux 必须先拉到仓库才能创建自己的网络依赖”的启动环.
+此时应在安装 Flux 前, 从已审核的本地 revision 手工应用该前置工作负载, 等待
+Deployment Available, 验证其实际 listener, 再用一次真实的依赖源请求证明路径可用.
+没有这类依赖的部署跳过该步骤. 这里的前置网络能力必须是平台配置的一部分,
+不得引入未纳入平台配置和恢复演练的临时外部依赖.
 
-随后在控制面节点执行:
+对已准备好的仓库, bootstrap 顺序应明确分成两个 API discovery 周期:
 
 ```sh
-flux bootstrap git \
-  --url=ssh://git@<git-host>/path/to/secoder-cluster \
-  --branch=master \
-  --private-key-file="$HOME/.ssh/id_ed25519" \
-  --path=clusters/secoder
+kubectl create namespace flux-system
+kubectl apply -f /secure/path/flux-read-secret.yaml
+# 如有仓库内网络前置依赖, 在这里应用并完成 listener/依赖请求验收.
+kubectl apply -f clusters/secoder/flux-system/gotk-components.yaml
+kubectl wait --for=condition=Established \
+  crd/gitrepositories.source.toolkit.fluxcd.io \
+  crd/kustomizations.kustomize.toolkit.fluxcd.io --timeout=5m
+kubectl apply -f clusters/secoder/flux-system/gotk-sync.yaml
 ```
 
-其中 `--url` 应当使用完整的 SSH URL, `--branch` 填写仓库实际使用的分支,
-`--private-key-file` 指向有仓库读写权限的私钥, `--path` 是集群配置在
-仓库中的目录. SECoder 默认使用 `clusters/secoder`.
+如果把 CRD、controller 和 `GitRepository`/`Kustomization` CR 放在同一次
+`kubectl apply` 中, 客户端可能因为 REST mapping 尚未刷新而拒绝后两种 CR.
+这不表示 CRD 安装失败; 等 CRD `Established` 后单独重试 sync 清单即可.
 
-命令完成后, FluxCD 会在仓库中提交组件清单和同步清单, 并在集群中创建
-`flux-system` 命名空间, 安装 `source-controller`,
-`kustomize-controller`, `helm-controller`, `notification-controller`
-等组件. 它还会创建指向 Git 仓库的 `GitRepository` 和负责应用
-`clusters/secoder` 的 `Kustomization`.
-
-使用以下命令确认 bootstrap 成功:
+验收不能只等待一个可能早已为 true 的 `Ready` 条件. 应等待这次发布对应的精确
+artifact 和 applied revision:
 
 ```sh
-kubectl get pods -n flux-system
+revision='master@sha1:SIGNED_COMMIT_SHA'
+kubectl -n flux-system wait \
+  --for=jsonpath='{.status.artifact.revision}'="$revision" \
+  gitrepository/flux-system --timeout=10m
+kubectl -n flux-system wait \
+  --for=jsonpath='{.status.lastAppliedRevision}'="$revision" \
+  kustomization/flux-system --timeout=20m
 flux get sources git -A
 flux get kustomizations -A
+flux get helmreleases -A
 ```
 
-FluxCD 的控制器 Pod 应当全部处于 `Running` 状态, Git source 和
-Kustomization 应当处于 `Ready` 状态. 后续修改集群配置时, 将变更提交到
-Git 仓库即可. 如果需要立即触发同步, 可以执行:
-
-```sh
-flux reconcile source git flux-system -n flux-system
-flux reconcile kustomization flux-system -n flux-system
-```
+若 source Ready 但子 Kustomization 停滞, 依次查看它的 `dependsOn`、health check、
+事件和 controller 日志. 只有精确 revision 已应用、所有依赖层 Ready、所有
+HelmRelease Ready, 且不存在异常 Pod 时, bootstrap 才完成.
 
 ### 反代
 
 反代通过 Traefik 的 LoadBalancer/External IP 暴露. 如果外层再部署 Nginx 并在
 Nginx 终止 TLS, 需要单独维护外层证书、到 Traefik 的 upstream, 以及足够大的
-`client_max_body_size`. 外层 HTTPS 返回 502 时, 应同时检查:
+`client_max_body_size`. 收到外层 502 报告后, 先从同一公网路径复测并记录当前响应;
+不要基于已经恢复的旧故障直接修改入口. 若仍失败, 应同时检查:
 
 ```sh
 kubectl -n infra get service traefik -o wide
@@ -508,21 +616,22 @@ Gateway 的 SSH listener. 应分别验证 HTTP、Gateway TCPRoute/Endpoint 和�
 直接访问 Traefik 的客户端. 部署和日常监控都要分别检查两层证书的 SAN 与
 `notAfter`; 若未部署 cert-manager, 必须建立人工续期和滚动验证流程.
 
-### 出站代理与冷启动
+### 镜像拉取与冷启动
 
-本机或 SSH tunnel 代理只适合 bootstrap, 不应成为永久运行依赖. 如果将 containerd
-的 HTTP(S) proxy 指向集群内 Xray ClusterIP, 普通 Pod 或节点重启不会改变 Service IP,
-但删除并重建 Service 或整个集群可能重新分配 ClusterIP. 更重要的是, 这会形成
-containerd -> Cilium/Service -> Xray Pod -> containerd 的启动环:
+部署前应逐一验证 Kubernetes、Cilium、Flux controller、Helm Chart 和业务镜像所用
+registry 的实际可达性, 并预拉取 Cilium、pause、Flux controller 及其他启动链关键
+镜像. registry 首页返回 401 可能只是正常的认证 challenge; 应结合 containerd 事件、
+active transfer 和目标镜像是否最终出现来判断, 不能把一次 HTTP 状态码当成拉取成功.
 
-- 重建前预拉取 Cilium、Xray、pause 和控制器镜像;
-- 保留独立的 bootstrap egress 或镜像中转站;
-- 记录 Xray Service IP, 并在 Service 重建后同步更新 containerd drop-in;
-- 将 Pod、Service、节点、loopback、NFS 和集群 DNS 网段加入 `NO_PROXY`;
-- 修改代理后重启 containerd, 用一个此前未缓存的小镜像验证真实拉取.
+containerd 的启动路径不能只依赖由同一个 containerd 启动的集群内网络工作负载,
+否则会形成 runtime -> CNI/Service -> 网络 Pod -> runtime 的冷启动环. 如果采用镜像
+中转站或内部 registry, 应保证它独立于待恢复集群, 记录原始与中转 digest, 并继续在
+GitOps 中固定不可变 digest.
 
-若采用镜像中转站, 应记录原始 digest 与中转后的 digest, 并继续在 GitOps 中固定
-不可变 digest. Git push 不应经过拉取镜像所使用的 HTTP proxy.
+镜像大且节点缓存为空时, 先观察拉取是否持续推进. Helm 五分钟超时但 active transfer
+仍增长通常是 action timeout, 不是 Chart 不兼容. 等待镜像完成后, 按上文的
+`requestedAt`/`resetAt` 路径恢复; 如果拉取没有进展, 再检查 registry 认证、DNS、
+节点磁盘、containerd 日志和 Pod event. 不要在镜像仍正常下载时删除 release 或 PVC.
 
 ### GitLab
 
@@ -544,6 +653,32 @@ Runner 注册和 Toolbox, 不能用单个 Web 页面 200 代替完整 install �
 Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deployment/Pod;
 不要因为看到 outbound email 配置而启用收件链路.
 
+#### 出站邮件验收与恢复
+
+出站 SMTP 不能只靠 HelmRelease Ready 验收. 应按 source、live Secret、Rails runtime、
+SMTP provider 和最终邮箱五层核对, 全程只比较选定的非敏感字段与凭据 SHA-256,
+不得打印密码:
+
+```sh
+kubectl -n prod get helmrelease/gitlab
+kubectl -n prod get deployments,pods -o name | grep -i mailroom || true
+kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
+  gitlab-rails runner 'require "json"; require "digest"; s=ActionMailer::Base.smtp_settings; puts({delivery_method: ActionMailer::Base.delivery_method, address: s[:address], port: s[:port], authentication: s[:authentication], starttls_auto: s[:enable_starttls_auto], verify_mode: s[:openssl_verify_mode], from: Gitlab.config.gitlab.email_from, reply_to: Gitlab.config.gitlab.email_reply_to, password_sha256: Digest::SHA256.hexdigest(s[:password].to_s)}.to_json)'
+kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
+  gitlab-rails runner 'Notify.test_email("operator@example.edu", "GitLab SMTP test", "delivery validation").deliver_now'
+```
+
+恢复时先定位不一致层级:
+
+1. source 与 live Secret 哈希不同: 修正权威 GitOps source 并等待 Secret reconciliation;
+2. live Secret 与 Rails runtime 哈希不同: 等待 Helm reconciliation, 并滚动重启实际读取
+   该 Secret 的 GitLab workload;
+3. runtime 一致但同步发送失败: 根据错误检查 DNS、端口、STARTTLS、证书校验、发件人
+   allowlist 和 provider credential, 不要改为明文或关闭证书校验来掩盖问题;
+4. SMTP transaction accepted 但未收到: 检查退信、垃圾邮件和 provider delivery log;
+5. 最终必须由收件人确认主题、发件人和正文. 同时再次证明 incoming email 为 false,
+   且集群中没有 Mailroom workload.
+
 1. 抄写 root 用户的 email
 
    把 GitLab root 用户的 email 抄写下来, 然后将其设置为 SECoder 的 root 用户的
@@ -556,6 +691,12 @@ Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deplo
    JWT identity 链接到 GitLab root, 最后删除重复用户. 完成后仍须用全新浏览器
    会话重新证明 SECoder SSO 落到 GitLab 管理员 root, 才能禁用密码登录.
 
+   如果真实 SSO redirect 返回 JWT signature verification failed, 立即停止密码登录
+   禁用操作. 分别对 SECoder 当前签名材料和 GitLab verifier 配置做不泄露内容的
+   fingerprint/hash 比较, 从权威 GitOps source 修正不一致的一侧, 等待配置生效并
+   重启读取固定 Secret/ConfigMap 的 workload. 之后使用全新浏览器会话重新执行完整
+   redirect, 必须落到预期管理员账号. 仅看到 provider 按钮或 email 相同都不算通过.
+
 1. 允许创建不过期的 PAT
 
    进入 `Admin > Settings > General > Account and limit`,
@@ -563,6 +704,10 @@ Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deplo
    - 禁用 `Allow new users to create top-level groups`
 
    点击 `Save changes` 保存选择.
+
+   GitLab 19 的设置页会把折叠 accordion 中的控件保留在页面树中. 保存前先展开对应
+   section, 保存后 hard reload 并逐项读回; 自动化工具报告点击成功并不能证明设置值
+   已经改变.
 
 1. 禁止注册
 
@@ -648,12 +793,58 @@ Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deplo
    填写到集群配置中; Secret 生效并重启 Grafana 后, 用全新浏览器会话验证一次
    GitLab OAuth 登录.
 
+#### CI 发布与 ApplySet 恢复
+
+平台服务使用管理员 namespace 发布; 普通用户 namespace 的 HTTPRoute hostname
+必须以 namespace 开头. admission 因 hostname/namespace 不匹配而拒绝 Route 时,
+不能只修改变量后重试, 因为 `kubectl apply --applyset` 不是原子的: 排在 Route 前面的
+Deployment、Service 和 ApplySet parent Secret 可能已经创建.
+
+恢复时先从 job trace 取得 applyset 名称和失败对象, 再在原 namespace 中盘点带有该
+ApplySet 标识的资源. 只删除本次失败创建的命名对象和 parent Secret, 确认没有旧版本
+业务资源被误包含后, 修正 namespace/hostname 并重试原发布任务. 最终验收必须同时满足:
+
+```sh
+namespace=NAMESPACE
+name=APPLICATION_NAME
+kubectl -n "$namespace" get secret \
+  -l applyset.kubernetes.io/id -o name
+kubectl -n "$namespace" get deployment,service,httproute,secret \
+  -l applyset.kubernetes.io/part-of -o name
+kubectl -n "$namespace" get "deployment/$name" "service/$name"
+kubectl -n "$namespace" get "httproute/$name" -o yaml
+kubectl -n "$namespace" get pods -l "app.kubernetes.io/name=$name" -o wide
+```
+
+不要对 `applyset.kubernetes.io/part-of` 的全部结果直接执行批量删除; 先把 label 值、
+parent Secret 和 job 中的 applyset 名称对应起来, 再逐个删除确认属于失败发布的对象.
+
+- Deployment 使用目标 commit 对应的不可变镜像且 Ready;
+- HTTPRoute 的 parent 同时为 `Accepted=True` 和 `ResolvedRefs=True`;
+- 公网 HTTPS 返回预期内容;
+- 失败 namespace 中不再残留同一发布的 workload 或 ApplySet parent.
+
+BuildKit 成功 push 镜像不证明目标 Pod 有 pull 权限. 私有项目应配置最小权限的
+Registry credential 和 `imagePullSecret`, 并从 Pod event 验证认证结果. 把项目改为
+Public 是独立的安全决策, 只能在源码和镜像本来就允许公开且得到明确批准时采用.
+
+GitLab CI/CD 变量需要隐藏时, 创建阶段使用当前 API 支持的
+`masked_and_hidden=true`; `masked=true` 只保证 job log 脱敏, `hidden=true` 在部分
+版本中不会得到相同的 API metadata. 创建后只读回 key、protected、masked、hidden
+等 metadata, 不读取 value.
+
 ### SECoder 使用
 
 空数据库第一次启动时会创建 SECoder root 用户, 初始密码是 `root`.
 平台对外开放前必须立即登录并修改密码, 然后确认初始密码已经返回 401.
 如果保留或恢复了原来的 PVC, 则现有密码不会被 bootstrap 覆盖; 不要删除数据库来
 “重置”密码.
+
+如果 SECoder core、exporter 或 reconciler 在首次启动时因 PostgreSQL 尚未就绪而
+重启, 先检查数据库 Cluster/Pod、PVC、Service endpoint 和应用 Secret 引用. 数据库
+恢复 Ready 后再次观察应用; 能自行恢复的 workload 不需要重建. 只有环境变量来自
+固定名称 Secret 且已发生变更时才滚动重启对应 Deployment/StatefulSet. 不要通过删除
+SECoder 数据库或轮换无关凭据来处理依赖启动顺序问题.
 
 集群重建后, 旧的用户 kubeconfig 即使尚未到期也不能继续使用, 因为 token 的
 签名密钥和绑定对象属于旧集群. 以 root 登录 SECoder 后, 从个人页面重新获取 RBAC
@@ -754,3 +945,19 @@ SonarQube, 当前版本会显示高风险确认对话框; 只有明确接受该�
 `https://gitlab.@@SECODER_BASE_DOMAIN@@/api/v4`, token 使用具有 `api` 权限的
 Personal Access Token (可以复用之前的). 保存后必须看到 `Configuration valid`,
 届时使用 SECoder 的学生将独立导入他们的项目.
+
+#### SonarQube 故障恢复
+
+- 新密码被拒绝时, 按当前页面列出的复杂度逐项满足要求; 不要假设长度足够, 也不要
+  为绕过校验而保留默认 admin 密码.
+- Pod Ready 但重启后项目或分析历史消失时, 立即停止新的初始化操作, 核对 PVC、挂载
+  目录和 H2 文件是否来自预期持久卷. 不要创建新 PVC 来掩盖旧数据未挂载.
+- GitLab OAuth redirect 失败时, 先保留 SonarQube 本地 admin 登录, 对照 callback URL、
+  Application ID/Secret、GitLab base URL 与实际 Route; Secret 修正后重启读取它的
+  SonarQube workload, 再用全新浏览器会话验收.
+- GitLab DevOps integration 不是 OAuth 登录配置. `Configuration valid` 失败时,
+  单独检查 API URL 是否以 `/api/v4` 结尾、PAT 是否具有 `api` scope、TLS/DNS
+  可达性和 token 是否有效. OAuth 能登录不代表项目导入 API 已配置成功.
+- `Allowed groups` 留空会扩大到所有可通过 GitLab 鉴权的用户. 如果当前版本出现高风险
+  确认, 必须先确认这是课程的既定访问边界; 未获确认时应配置明确 group allowlist,
+  不能为了让 OAuth 测试通过而无条件放开.
