@@ -2,8 +2,6 @@
 
 个人资料页面允许你更新账户信息, 修改密码以及管理 Kubernetes 访问凭据.
 
-<!-- TODO(screenshots): 重拍本章个人页截图; 现有图片缺少下载 kubeconfig 和轮换令牌按钮. -->
-
 ## 访问个人资料页面
 
 登录后, 通过侧边栏导航点击 **个人资料** 即可进入个人资料页面.
@@ -74,11 +72,21 @@ GitLab 才会在下一次 SSO 中收到新姓名和邮箱.
 此前复制的令牌、下载的 kubeconfig, 以及使用旧令牌的 GitLab CI `TOKEN` 变量都会失效.
 轮换后应立即更新仍需使用的 CI 变量并重新下载 kubeconfig.
 
+<div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
+  <img src="assets/profile-desktop-06.png" alt="轮换令牌确认 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
+  <img src="assets/profile-mobile-06.png" alt="轮换令牌确认 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
+</div>
+
 ### 下载 kubectl 配置
 
 点击 **下载 kubectl 配置** 按钮, 阅读并确认凭据安全提示后, 浏览器会下载一个
 `u-<你的用户 ID>.kubeconfig` 文件. 该文件已经包含访问 SECoder Kubernetes 集群
 所需的 API 地址、用户令牌、当前上下文和你的默认命名空间.
+
+<div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
+  <img src="assets/profile-desktop-05.png" alt="下载 kubectl 配置确认 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
+  <img src="assets/profile-mobile-05.png" alt="下载 kubectl 配置确认 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
+</div>
 
 下载后可以通过以下任一方式使用:
 

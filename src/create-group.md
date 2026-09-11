@@ -105,10 +105,14 @@
 
 ## 删除小组
 
-<!-- TODO(screenshots): 添加删除小组确认框和组长“小组邀请”标签页截图. -->
-
 只有组长能删除小组. 在 **我的小组** 标签页点击 **删除小组** 并确认后,
 系统会删除小组, 清除该小组的待处理邀请, 并让所有成员回到未分组状态.
+
+<div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
+  <img src="assets/delete-group-desktop-01.png" alt="删除小组确认 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
+  <img src="assets/delete-group-mobile-01.png" alt="删除小组确认 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
+</div>
+
 这个操作不能从学生界面撤销; 删除前请先确认小组标识符和成员列表.
 
 ---
@@ -140,6 +144,11 @@
 <div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
   <img src="assets/invite-user-desktop-02.png" alt="发送邀请 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
   <img src="assets/invite-user-mobile-02.png" alt="发送邀请 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
+</div>
+
+<div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
+  <img src="assets/group-invitations-desktop-01.png" alt="小组邀请标签页 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
+  <img src="assets/group-invitations-mobile-01.png" alt="小组邀请标签页 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
 </div>
 
 ---

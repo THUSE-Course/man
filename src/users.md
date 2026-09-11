@@ -3,7 +3,10 @@
 登录后, 通过侧边栏点击 **用户** 可以打开只读的用户目录. 该页面用于查看当前平台
 已经注册的用户及其组队状态, 不提供修改用户资料或管理账号的操作.
 
-<!-- TODO(screenshots): 添加当前用户目录的桌面端和移动端截图. -->
+<div style="display: flex; gap: 5%; align-items: center; justify-content: center;">
+  <img src="assets/users-desktop-01.png" alt="用户目录 - 电脑端" style="height: 350px; width: auto; object-fit: contain;">
+  <img src="assets/users-mobile-01.png" alt="用户目录 - 手机端" style="height: 350px; width: auto; object-fit: contain;">
+</div>
 
 目录按学号排序, 显示以下字段:
 

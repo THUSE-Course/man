@@ -2,8 +2,6 @@
 
 登录是使用 SECoder 平台的第一步, 本章将指导你完成登录流程.
 
-<!-- TODO(screenshots): 重拍本章登录页截图; 现有图片早于“记住登录”复选框. -->
-
 ## 访问登录页面
 
 在浏览器中打开 [https://@@SECODER_BASE_DOMAIN@@](https://@@SECODER_BASE_DOMAIN@@),
