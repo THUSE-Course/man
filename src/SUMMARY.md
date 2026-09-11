@@ -17,4 +17,5 @@
 本手册面向课程助教和系统管理员, 介绍了 SECoder 平台的设计原理与部署管理.
 
 - [系统设计](./design.md) - 平台架构与设计理念
-- [部署管理](./admin.md) - SECoder 集群部署与配置
+- [部署 SECoder](./admin.md) - SECoder 集群部署与配置
+- [批量添加用户和小组名单导入](./bulk-users-and-roster.md) - 批量维护注册名单与小组成员关系

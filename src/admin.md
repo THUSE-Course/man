@@ -1,13 +1,11 @@
-# 管理
+# 部署 SECoder
 
 SECoder 既可以指整个包含 Kubernetes 集群在内的平台,
 也可以指集群中负责用户管理的前后端.
 
 没有特别说明的话, 部署 SECoder 的含义是配置并调试集群在内的整个平台.
 
-## 部署 SECoder
-
-### 前置要求
+## 前置要求
 
 - 拥有校园网 IPv4 或 IPv6 地址, SECoder 至少要使用 `22`, `443` 端口.
   尽管可以在应用层进行负载均衡, 但更推荐的做法是进行端口绑定或裸机监听,
@@ -19,7 +17,7 @@ SECoder 既可以指整个包含 Kubernetes 集群在内的平台,
 - 推荐至少两台虚拟机 (控制面和工作节点分离). 单节点部署也可运行,
   但控制面、入口和所有有状态依赖会同时失效, 不属于高可用部署.
 
-### 部署故障索引
+## 部署故障索引
 
 > **故障排查**
 >
@@ -35,7 +33,7 @@ SECoder 既可以指整个包含 Kubernetes 集群在内的平台,
 > - SECoder root/RBAC/kubeconfig 失效: 见“[SECoder 使用](#secoder-使用)”.
 > - SonarQube 数据、权限或 OAuth 失败: 见“[SonarQube](#sonarqube)”.
 
-### Kubernetes 集群
+## Kubernetes 集群
 
 新版本 SECoder 的开发在 2026 年初完成, 使用 Debian 13 和 Kubernetes 1.36.
 部署时应固定 Kubernetes minor 版本的软件源, 同时安装匹配版本的 `kubeadm`,
@@ -296,7 +294,7 @@ Gateway=172.30.20.10
 
 虽然 cilium 理论上能通过二层发现自动学到这个路由. 但如果未来要配置三层可达的路由, 就可以这么办.
 
-### IPv6
+## IPv6
 
 如果部署 IPv6 单栈集群, kubeadm 配置可参考:
 
@@ -332,7 +330,7 @@ maxPods: 512
 IPv6 单栈还需要启用 `net.ipv6.conf.all.forwarding = 1`,
 并且仍然需要安装 CNI 后节点才会进入 `Ready` 状态.
 
-### FluxCD
+## FluxCD
 
 为了保持不同学期之间的一致性, SECoder 采用 GitOps 的方式部署集群配置.
 FluxCD 是将配置文件同步为集群资源的有力工具. 管理员需要[下载 `flux`
@@ -406,7 +404,7 @@ cat /etc/exports
 `/etc/exports`, 再用 `findmnt`, `exportfs -v` 和 `stat` 确认实际 export root、
 子目录和挂载目标; 不得从文档示例推断破坏性操作的路径.
 
-### GitOps 依赖顺序与发布验证
+## GitOps 依赖顺序与发布验证
 
 > **故障排查**
 >
@@ -564,7 +562,7 @@ flux get helmreleases -A
 只有精确 revision 已应用、所有依赖层 Ready、所有 HelmRelease Ready,
 且不存在异常 Pod 时, bootstrap 才完成.
 
-### 反代
+## 反代
 
 > **故障排查**
 >
@@ -597,7 +595,7 @@ flux get helmreleases -A
 > 直接访问 Traefik 的客户端. 部署和日常监控都要分别检查两层证书的 SAN 与
 > `notAfter`; 若未部署 cert-manager, 必须建立人工续期和滚动验证流程.
 
-### 镜像拉取与冷启动
+## 镜像拉取与冷启动
 
 > **故障排查**
 >
@@ -616,7 +614,7 @@ flux get helmreleases -A
 > `requestedAt`/`resetAt` 路径恢复; 如果拉取没有进展, 再检查 registry 认证、DNS、
 > 节点磁盘、containerd 日志和 Pod event. 不要在镜像仍正常下载时删除 release 或 PVC.
 
-### GitLab
+## GitLab
 
 因为 GitLab 的 Helm Chart 所能覆盖的配置有限, 在确认 GitLab 正确启动后,
 管理员需要登录 root 用户并配置下列设置:
@@ -636,7 +634,7 @@ Runner 注册和 Toolbox, 不能用单个 Web 页面 200 代替完整 install �
 Mailroom, 同时可以保留 outbound SMTP. 验收时确认没有 Mailroom Deployment/Pod;
 不要因为看到 outbound email 配置而启用收件链路.
 
-#### 管理员初始化
+### 管理员初始化
 
 GitLab 19 的设置页会把折叠 accordion 中的控件保留在页面树中. 每次修改前先展开
 对应 section, 保存后 hard reload 并逐项读回; 自动化工具报告点击成功并不能证明
@@ -765,7 +763,7 @@ GitLab 19 的设置页会把折叠 accordion 中的控件保留在页面树中. 
    填写到集群配置中; Secret 生效并重启 Grafana 后, 用全新浏览器会话验证一次
    GitLab OAuth 登录.
 
-#### 出站邮件验收与恢复
+### 出站邮件验收与恢复
 
 出站 SMTP 应在 GitLab 管理员初始化和集成配置完成后验收, 不能只以 HelmRelease
 Ready 作为结论. 按以下顺序核对, 全程不得打印密码:
@@ -803,7 +801,7 @@ kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
 >   直到邮箱收件读回完成.
 > - 任何恢复都不得顺带启用 incoming email、复制 IMAP credential 或部署 Mailroom.
 
-### CI 发布与 ApplySet 恢复
+## CI 发布与 ApplySet 恢复
 
 > **故障排查**
 >
@@ -845,7 +843,7 @@ kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
 > 版本中不会得到相同的 API metadata. 创建后只读回 key、protected、masked、hidden
 > 等 metadata, 不读取 value.
 
-### SECoder 使用
+## SECoder 使用
 
 空数据库第一次启动时会创建 SECoder root 用户, 初始密码是 `root`.
 平台对外开放前必须立即登录并修改密码, 然后确认初始密码已经返回 401.
@@ -868,51 +866,11 @@ kubectl -n prod exec deployment/gitlab-toolbox -c toolbox -- \
 > `u-root` 应带有正确的 SECoder tenant label, root 的绑定应指向预期的
 > cluster-admin role. 普通用户还要验证只能访问自己的 namespace 和所在小组 namespace.
 
-助教配置后端时, 需准备学期内选课学生的学号与初始密码, 格式为纯文本每行一个
-(注意用 Unicode 编码):
+用户注册名单和小组名单的日常维护, 见独立章节
+[《批量添加用户和小组名单导入》](./bulk-users-and-roster.md). 该章节包含批量用户
+文件格式、全量 CSV 约束、预览确认流程以及常见验证错误的处理方式.
 
-```
-197011201:123456
-19701121:123456
-```
-
-这些添加过的学号允许注册, 其他未添加的不可以注册 SECoder. 允许多次添加.
-
-#### 以管理员身份导入小组名单
-
-root 无需冒充学生来接受邀请. 在 SECoder 的 **管理员** 页面打开
-**小组名单导入**, 上传 UTF-8 编码的 CSV 并先检查系统生成的变更预览. 文件必须使用
-以下精确表头; `Member` 列可以按顺序继续增加:
-
-```csv
-CodeName,DisplayName,Leader,Member1,Member2,Member3
-team-a,第一组,20260001,20260002,20260003
-team-b,第二组,20260004,20260005,
-,,,20260006,
-```
-
-- `CodeName` 是不可变且唯一的小组标识符, 必须符合页面所述的 RFC 1035 格式.
-- `DisplayName` 是可修改的显示名称. CSV 中不存在的 `CodeName` 会创建为新小组;
-  已存在的小组会按 CSV 更新显示名称和组长.
-- `Leader` 会成为该小组组长, 并自动计入成员, 不要再次写入 `Member` 列.
-- `CodeName`、`DisplayName` 和 `Leader` 同时为空的行表示未分组学生, 最多只能有一行.
-- 每个现有小组都必须出现. 每个已注册、未封禁、非 sudo 学生也必须且只能出现一次;
-  缺失、重复、未知或被封禁的账号都会使整份文件验证失败.
-- 被封禁账号及其现有小组关系不会被名单导入修改.
-
-验证成功后, 页面会列出新建或重命名的小组、组长转移和学生分组变化. 只有 root
-再次确认后才会在一个数据库事务中应用全部变更; 任一验证错误都不会造成部分导入.
-数据库提交后会同步 Kubernetes 小组 namespace 的 tenant label.
-
-> **故障排查**
->
-> 如果 tenant label 同步失败, 页面会明确列出受影响的小组; 重新预览并应用同一文件
-> 即可重试标签同步.
-
-名单导入不会自动修改 GitLab 子组成员. 学生仍按个人页面现有的
-**同步 GitLab 子组** 流程触发 GitLab 同步.
-
-### SonarQube
+## SonarQube
 
 同样, 登录 admin 用户, 密码 `admin`. 第一次登录后会要求改密码.
 新密码不仅有长度要求, 还必须同时满足 SonarQube 当前版本显示的大小写字母、数字、
@@ -958,7 +916,7 @@ SonarQube, 当前版本会显示高风险确认对话框; 只有明确接受该�
 Personal Access Token (可以复用之前的). 保存后必须看到 `Configuration valid`,
 届时使用 SECoder 的学生将独立导入他们的项目.
 
-#### SonarQube 故障恢复
+### SonarQube 故障恢复
 
 > **故障排查**
 >
