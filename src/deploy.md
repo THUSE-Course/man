@@ -16,6 +16,13 @@ CI/CD 自动部署.
 必须同步更新项目中的 `TOKEN` 变量, 否则后续部署会鉴权失败. 应把该变量设为 masked;
 不要写进仓库或输出到 job 日志.
 
+如果镜像保存在 Private GitLab 项目中, 还需要让 Kubernetes 在 CI 作业结束后继续拉取镜像:
+到项目的 **Settings → Repository → Deploy tokens** 创建仅有 `read_registry` 权限的
+Deploy Token, 将一次性显示的用户名和令牌分别存为 CI 变量 `GITLAB_REGISTRY_USER` 和
+`GITLAB_DEPLOY_TOKEN` (后者设为 masked), 并在部署作业中用它们创建 Registry 拉取
+Secret, 供 Deployment 的 `imagePullSecrets` 使用. 前后端项目各自创建, 完整示例见
+[课程部署文档](https://github.com/THUSE-Course/course-index/blob/master/docs/deploy/deployer.md#cicd-%E5%87%AD%E6%8D%AE).
+
 ## 先理解 `kustomization.yaml`
 
 `kustomization.yaml` 是部署入口文件:
