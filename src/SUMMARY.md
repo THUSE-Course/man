@@ -9,6 +9,7 @@
 - [个人资料](./profile.md) - 管理个人信息与 Kubernetes 凭据
 - [小组管理](./create-group.md) - 创建小组, 邀请成员与团队协作
 - [部署应用](./deploy.md) - 在 SECoder 平台上部署应用
+- [代码质量检查](./sonar.md) - 接入 SonarQube 并使用质量门禁
 
 ---
 

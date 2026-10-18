@@ -59,7 +59,7 @@ SonarQube 是一个开源的代码质量和安全分析平台, 能够检测代�
 - 跟踪技术债务
 - 检查安全漏洞
 
-**相关文档**: [SonarQube 官方文档](https://docs.sonarsource.com/)
+**相关文档**: [代码质量检查](./sonar.md) | [SonarQube 官方文档](https://docs.sonarsource.com/)
 
 ### Grafana 监控 集群指标告警
 
