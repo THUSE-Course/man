@@ -22,6 +22,12 @@ SonarQube 会分析源代码和测试报告, 帮助你发现潜在错误、安�
 
 截图中的 `django-backend` 是演示项目. 配置自己的项目时, 使用自己的仓库和导入后生成的 Project Key.
 
+### 为导入项目添加其他组员权限
+
+从 GitLab 导入项目时, SonarQube 会给执行导入的用户分配项目权限; GitLab 小组中的其他成员不会因此自动获得该项目的权限, 需要逐个添加.
+
+如果组员尚未登录过 SonarQube, 请先让他们使用各自的 GitLab 账号登录一次, 以创建对应的 SonarQube 用户. 然后由项目管理员打开项目的 **Project settings → Permissions**, 切换到 **Users**, 搜索组员账号, 并勾选该用户权限行中的全部选项. 每位需要管理项目的组员都重复此操作; 若页面提示错误, 忽略提示并继续.
+
 ## 配置分析令牌
 
 在 GitLab CI 引导页点击 **Generate a token**, 为当前项目生成 Project Analysis Token, 设置名称和合适的有效期. 令牌只用于分析当前项目; 页面只显示一次, 创建后立即复制到 CI/CD 变量中.

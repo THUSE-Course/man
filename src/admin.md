@@ -916,6 +916,12 @@ SonarQube, 当前版本会显示高风险确认对话框; 只有明确接受该�
 Personal Access Token (可以复用之前的). 保存后必须看到 `Configuration valid`,
 届时使用 SECoder 的学生将独立导入他们的项目.
 
+最后, 先用 GitLab `root` 登录 SonarQube 一次, 建立 GitLab 身份与 SonarQube 用户的关联.
+然后用 SonarQube `Administrator` 用户登录, 打开 **Administration → Security → Groups**,
+编辑 `sonar-administrators` 组并将 `root` 加入. 再打开
+**Administration → Security → Global permissions**, 在 Users 中搜索 `root`,
+勾选 **Administer System**. 完成后让 GitLab `root` 重新登录 SonarQube, 确认权限生效.
+
 ### SonarQube 故障恢复
 
 > **故障排查**
