@@ -16,11 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
       - name: Setup mdBook
         uses: peaceiris/actions-mdbook@v2
         with:
-          mdbook-version: "0.4.52"
+          mdbook-version: "0.5.4"
       - name: Build book
         run: mdbook build
       - name: Upload Pages
